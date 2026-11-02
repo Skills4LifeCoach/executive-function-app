@@ -6,47 +6,12 @@
 <title>Skills 4Life Coaching Portal</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-<script>tailwind.config={theme:{extend:{colors:{brand:'#3B62FF',slate4:'#707070'},fontFamily:{sans:['"Plus Jakarta Sans"','system-ui','sans-serif']}}}}</script>
+<script>tailwind.config={theme:{extend:{colors:{brand:'#3B62FF',royal:'#2F54EB',slate4:'#707070'},fontFamily:{sans:['"Plus Jakarta Sans"','system-ui','sans-serif']}}}}</script>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/lucide-react@0.383.0/dist/umd/lucide-react.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
-<style>
-body{background:#F4F6FB;color:#1f2433}
-button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #3B62FF;outline-offset:2px}
-
-/* ---------- Print-ready parent report ---------- */
-/* On screen the report document is never shown. */
-.print-report{display:none}
-
-@media print{
-  @page{size:Letter;margin:0.6in}
-  html,body{background:#fff!important;color:#1f2433;margin:0;padding:0;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact}
-  /* Hide the entire portal: header, tabs, buttons, dashboards, footer */
-  .no-print{display:none!important}
-  /* Show only the standalone report document */
-  .print-report{display:block!important;background:#fff;font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .pr-header{display:flex;align-items:center;gap:14px;padding-bottom:14px;border-bottom:4px solid #3B62FF}
-  .pr-brand{line-height:1.1}
-  .pr-brand-name{font-size:26px;font-weight:800;color:#3B62FF;letter-spacing:-0.01em}
-  .pr-brand-sub{font-size:11px;font-weight:600;color:#707070;letter-spacing:0.28em;margin-top:2px}
-  .pr-title{margin:26px 0 4px;font-size:24px;font-weight:800;color:#3B62FF}
-  .pr-meta{display:flex;gap:28px;font-size:13px;color:#707070;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid #dfe5ff}
-  .pr-meta b{color:#1f2433;font-weight:700}
-  .pr-section{border:1px solid #dfe5ff;border-left:6px solid #3B62FF;border-radius:6px;
-    padding:14px 18px;margin-bottom:16px;break-inside:avoid;page-break-inside:avoid;background:#fff}
-  .pr-section h2{margin:0 0 8px;font-size:12px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#3B62FF}
-  .pr-section p,.pr-section li{margin:0 0 6px;font-size:14px;line-height:1.6;color:#1f2433;white-space:pre-wrap}
-  .pr-section ul{margin:0;padding-left:20px}
-  .pr-section li{white-space:normal}
-  .pr-section .pr-empty{color:#707070;font-style:italic}
-  .pr-footer{margin-top:28px;padding-top:10px;border-top:2px solid #3B62FF;display:flex;justify-content:space-between;
-    font-size:11px;color:#707070}
-  .pr-footer strong{color:#3B62FF}
-}
-</style>
+<style>body{background:#F4F6FB;color:#1f2433}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #3B62FF;outline-offset:2px}</style>
 </head>
 <body class="font-sans">
 <div id="root"></div>
@@ -77,34 +42,57 @@ const Card=({title,icon:Ic,children,action})=>(
  {children}
 </section>);
 
-/* Standalone, print-only report document. Hidden on screen; the only thing visible when printing. */
-function PrintReport({report}){
- const winLines=(report.wins||'').split('\n').map(s=>s.trim()).filter(Boolean);
- const generated=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
- return(<div className="print-report" aria-hidden="true">
-  <div className="pr-header">
-   <Logo size={64}/>
-   <div className="pr-brand"><div className="pr-brand-name">Skills 4Life</div><div className="pr-brand-sub">COACHING</div></div>
-  </div>
-  <h1 className="pr-title">Parent Session Report</h1>
-  <div className="pr-meta"><span><b>Session date:</b> {report.date}</span><span><b>Prepared for:</b> Parent / Guardian</span></div>
-  <div className="pr-section"><h2>Session Wins</h2>
-   {winLines.length?<ul>{winLines.map((w,i)=><li key={i}>{w}</li>)}</ul>:<p className="pr-empty">Nothing logged for this session.</p>}
-  </div>
-  <div className="pr-section"><h2>Next Focus</h2>
-   {report.focus?<p>{report.focus}</p>:<p className="pr-empty">Nothing logged for this session.</p>}
-  </div>
-  <div className="pr-section"><h2>Coach Notes</h2>
-   {report.note?<p>{report.note}</p>:<p className="pr-empty">No additional notes this session.</p>}
-  </div>
-  <div className="pr-footer"><span><strong>Skills 4Life Coaching</strong> · Executive function skills for life</span><span>Generated {generated}</span></div>
- </div>);
-}
-
 const initTasks=[{id:1,t:'Finish science lab write-up',due:'Tue',done:false},{id:2,t:'Pack backpack the night before',due:'Daily',done:true},{id:3,t:'Break history project into 3 steps',due:'Thu',done:false},{id:4,t:'10-minute reading with notes',due:'Daily',done:false}];
 const initGoals=[{id:1,g:'Start homework within 15 minutes of arriving home',p:60},{id:2,g:'Use planner for every assignment',p:80},{id:3,g:'Ask for help before a deadline stress spike',p:35}];
 const planner=[['Mon','Math practice set','4:00'],['Tue','Science lab write-up','4:30'],['Wed','Reading + notes','4:00'],['Thu','History project step 2','4:30'],['Fri','Weekly planner reset','3:45']];
-const events={3:'Coaching session',5:'Lab due',10:'Coaching session',12:'History step 2',17:'Coaching session',19:'Quiz',24:'Coaching session',26:'Project due'};
+
+/* Calendar data for November 2026. kind: session | task | goal | log */
+const events={
+ 2:[{k:'log',t:'Session logged',n:'Started homework on time 3 days in a row. Used the planner without a reminder.'}],
+ 3:[{k:'session',t:'Coaching session',n:'4:00 pm. Review the weekly planner and the homework-start timer.'},{k:'task',t:'Break history project into 3 steps',n:'Bring your three steps to the session.'}],
+ 5:[{k:'task',t:'Science lab write-up due',n:'Turn in before class.'}],
+ 7:[{k:'goal',t:'Goal check-in: Use planner for every assignment',n:'Currently at 80%. Aim for every assignment this week.'},{k:'task',t:'Weekly planner reset',n:'15 minutes: clear last week, add next week.'}],
+ 10:[{k:'session',t:'Coaching session',n:'4:00 pm. Check progress on the history project.'}],
+ 12:[{k:'task',t:'History project step 2',n:'Draft the outline.'}],
+ 17:[{k:'session',t:'Coaching session',n:'4:00 pm. Goal review.'}],
+ 19:[{k:'task',t:'Quiz',n:'Study for 10 minutes each night this week.'}],
+ 24:[{k:'session',t:'Coaching session',n:'4:00 pm. Plan the project wrap-up.'}],
+ 26:[{k:'task',t:'History project due',n:'Final check: all three steps done.'}]
+};
+const kindMeta={session:{label:'Session',Ic:Users},task:{label:'Task',Ic:ListChecks},goal:{label:'Goal',Ic:Target},log:{label:'Session log',Ic:ClipboardList}};
+const TODAY=2;
+
+function CalendarSection(){
+ const [selectedDate,setSelectedDate]=useState(TODAY);
+ const items=events[selectedDate]||[];
+ const label=new Date(2026,10,selectedDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+ return(<div className="lg:col-span-2 grid md:grid-cols-2 gap-5">
+ <Card title="November 2026" icon={CalendarDays}>
+  <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate4 mb-1">{['S','M','T','W','T','F','S'].map((d,i)=><div key={i}>{d}</div>)}</div>
+  <div className="grid grid-cols-7 gap-1">{Array.from({length:30},(_,i)=>i+1).map(d=>{
+   const sel=d===selectedDate,has=!!events[d];
+   return(<button key={d} type="button" onClick={()=>setSelectedDate(d)} aria-pressed={sel}
+    aria-label={new Date(2026,10,d).toLocaleDateString('en-US',{month:'long',day:'numeric'})+(has?', has items':'')+(d===TODAY?', today':'')}
+    className={'aspect-square rounded-full flex flex-col items-center justify-center text-sm transition cursor-pointer '+
+     (sel?'bg-royal text-white font-bold shadow-md ring-2 ring-royal ring-offset-2':(has?'bg-brand/10 text-brand font-bold hover:bg-brand/20':'text-slate-600 hover:bg-slate-100'))+
+     (!sel&&d===TODAY?' ring-2 ring-brand':'')}>
+    {d}{has&&<span className={'w-1.5 h-1.5 rounded-full mt-0.5 '+(sel?'bg-white':'bg-brand')}/>}
+   </button>);})}</div>
+  <p className="text-xs text-slate4 mt-3">Click a day to see what is scheduled. Dots mark days with items. Today has a thin outline.</p>
+ </Card>
+ <Card title="Schedule & Tasks for Selected Date" icon={ListChecks}>
+  <div aria-live="polite">
+   <p className="font-bold text-royal mb-3">{label}{selectedDate===TODAY&&<span className="ml-2 text-xs font-semibold text-slate4">Today</span>}</p>
+   {items.length===0
+    ?<div className="text-center py-10 text-slate4"><CalendarDays className="mx-auto mb-2" size={28}/><p>No sessions or tasks scheduled for this day.</p></div>
+    :<ul className="space-y-3">{items.map((it,i)=>{const M=kindMeta[it.k];return(
+      <li key={i} className="flex gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+       <M.Ic size={20} className="text-brand mt-0.5 shrink-0"/>
+       <div><p className="text-xs font-semibold text-slate4">{M.label}</p><p className="font-semibold text-slate-800">{it.t}</p><p className="text-sm text-slate-600">{it.n}</p></div>
+      </li>);})}</ul>}
+  </div>
+ </Card></div>);
+}
 
 function Student(){
  const [tasks,setTasks]=useState(initTasks);const [nt,setNt]=useState('');const [goals,setGoals]=useState(initGoals);
@@ -125,25 +113,14 @@ function Student(){
  <Card title="Weekly Planner" icon={ClipboardList}>
   <div className="divide-y divide-slate-100">{planner.map(([d,t,tm])=>(<div key={d} className="flex items-center gap-4 py-2.5"><span className="w-12 font-bold text-brand">{d}</span><span className="flex-1 text-slate-700">{t}</span><span className="flex items-center gap-1 text-xs text-slate4"><Clock size={13}/>{tm} pm</span></div>))}</div>
  </Card>
- <Card title="November 2026" icon={CalendarDays}>
-  <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate4 mb-1">{['S','M','T','W','T','F','S'].map((d,i)=><div key={i}>{d}</div>)}</div>
-  <div className="grid grid-cols-7 gap-1">{Array.from({length:30},(_,i)=>i+1).map(d=>(<div key={d} title={events[d]||''} className={'aspect-square rounded-lg flex flex-col items-center justify-center text-sm '+(events[d]?'bg-brand/10 text-brand font-bold':'text-slate-600')+(d===2?' ring-2 ring-brand':'')}>{d}{events[d]&&<span className="w-1.5 h-1.5 rounded-full bg-brand mt-0.5"/>}</div>))}</div>
-  <p className="text-xs text-slate4 mt-3">Dots mark sessions and due dates. Today is circled.</p>
- </Card></div>);
+ <CalendarSection/></div>);
 }
 
 function Parent({report,wins}){
- // Opens the browser print dialog showing ONLY the standalone report (see print CSS).
- // Choose "Save as PDF" as the destination. The page title becomes the suggested file name.
- const dl=()=>{
-  const prevTitle=document.title;
-  document.title='Skills4Life-Session-Report-'+String(report.date||'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  const restore=()=>{document.title=prevTitle;window.removeEventListener('afterprint',restore)};
-  window.addEventListener('afterprint',restore);
-  window.print();
- };
+ const dl=()=>{const txt=`SKILLS 4LIFE COACHING - PARENT REPORT\n=====================================\nSession date: ${report.date}\n\nWins this session:\n${report.wins}\n\nFocus for next time:\n${report.focus}\n\nNotes for parents:\n${report.note||'None'}\n`;
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='parent-report.txt';a.click()};
  return(<div className="grid lg:grid-cols-2 gap-5">
- <Card title="Latest Session Update" icon={Users} action={report.visible&&<button onClick={dl} className="flex items-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-xl px-3 py-1.5"><Download size={15}/>Download Session Report</button>}>
+ <Card title="Latest Session Update" icon={Users} action={report.visible&&<button onClick={dl} className="flex items-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-xl px-3 py-1.5"><Download size={15}/>Download report</button>}>
   {report.visible?(<div className="space-y-4 text-slate-700"><p className="text-xs text-slate4">Session on {report.date}</p>
    <div><h4 className="font-bold text-slate-800 mb-1">Wins</h4><p className="whitespace-pre-wrap">{report.wins||'Nothing logged yet.'}</p></div>
    <div><h4 className="font-bold text-slate-800 mb-1">Focus for next time</h4><p className="whitespace-pre-wrap">{report.focus||'Nothing logged yet.'}</p></div>
@@ -186,18 +163,17 @@ function App(){
  const addWin=()=>{const n=report.wins.split('\n').map(s=>s.trim()).filter(Boolean).filter(s=>!wins.some(w=>w.t===s)).map(t=>({t,d:report.date}));setWins([...n,...wins])};
  const tabs=[['student','Student',GraduationCap],['parent','Parent',Users],['coach','Coach',ClipboardList]];
  return(<div className="min-h-screen">
-  <header className="no-print bg-white border-b border-slate-200 sticky top-0 z-10">
+  <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
    <div className="max-w-6xl mx-auto px-5 py-3 flex flex-wrap items-center justify-between gap-3">
     <div className="flex items-center gap-3"><Logo/><div className="leading-tight"><div className="text-xl font-extrabold text-brand tracking-tight">Skills 4Life</div><div className="text-xs font-semibold text-slate4 tracking-[0.25em]">COACHING</div></div></div>
     <nav className="flex gap-1 bg-slate-100 rounded-xl p-1" role="tablist">{tabs.map(([k,l,Ic])=>(<button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)} className={'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition '+(tab===k?'bg-brand text-white shadow':'text-slate4 hover:text-slate-900')}><Ic size={16}/>{l}</button>))}</nav>
    </div></header>
-  <main className="no-print max-w-6xl mx-auto px-5 py-8">
+  <main className="max-w-6xl mx-auto px-5 py-8">
    <h1 className="text-2xl font-extrabold text-slate-800 mb-1">{tab==='student'?'Student Dashboard':tab==='parent'?'Parent Portal':'Coach Dashboard'}</h1>
    <p className="text-slate4 mb-6">{tab==='student'?'Your tasks, plans, and goals for this week.':tab==='parent'?'Progress, session updates, and wins.':'Log the session and choose what parents can see.'}</p>
    {tab==='student'&&<Student/>}{tab==='parent'&&<Parent report={report} wins={wins}/>}{tab==='coach'&&<Coach report={report} setReport={setReport} addWin={addWin}/>}
   </main>
-  <footer className="no-print text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life</footer>
-  <PrintReport report={report}/>
+  <footer className="text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life</footer>
  </div>);
 }
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
