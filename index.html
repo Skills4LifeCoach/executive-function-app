@@ -11,7 +11,42 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/lucide-react@0.383.0/dist/umd/lucide-react.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
-<style>body{background:#F4F6FB;color:#1f2433}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #3B62FF;outline-offset:2px}</style>
+<style>
+body{background:#F4F6FB;color:#1f2433}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #3B62FF;outline-offset:2px}
+
+/* ---------- Print-ready parent report ---------- */
+/* On screen the report document is never shown. */
+.print-report{display:none}
+
+@media print{
+  @page{size:Letter;margin:0.6in}
+  html,body{background:#fff!important;color:#1f2433;margin:0;padding:0;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  /* Hide the entire portal: header, tabs, buttons, dashboards, footer */
+  .no-print{display:none!important}
+  /* Show only the standalone report document */
+  .print-report{display:block!important;background:#fff;font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pr-header{display:flex;align-items:center;gap:14px;padding-bottom:14px;border-bottom:4px solid #3B62FF}
+  .pr-brand{line-height:1.1}
+  .pr-brand-name{font-size:26px;font-weight:800;color:#3B62FF;letter-spacing:-0.01em}
+  .pr-brand-sub{font-size:11px;font-weight:600;color:#707070;letter-spacing:0.28em;margin-top:2px}
+  .pr-title{margin:26px 0 4px;font-size:24px;font-weight:800;color:#3B62FF}
+  .pr-meta{display:flex;gap:28px;font-size:13px;color:#707070;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid #dfe5ff}
+  .pr-meta b{color:#1f2433;font-weight:700}
+  .pr-section{border:1px solid #dfe5ff;border-left:6px solid #3B62FF;border-radius:6px;
+    padding:14px 18px;margin-bottom:16px;break-inside:avoid;page-break-inside:avoid;background:#fff}
+  .pr-section h2{margin:0 0 8px;font-size:12px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#3B62FF}
+  .pr-section p,.pr-section li{margin:0 0 6px;font-size:14px;line-height:1.6;color:#1f2433;white-space:pre-wrap}
+  .pr-section ul{margin:0;padding-left:20px}
+  .pr-section li{white-space:normal}
+  .pr-section .pr-empty{color:#707070;font-style:italic}
+  .pr-footer{margin-top:28px;padding-top:10px;border-top:2px solid #3B62FF;display:flex;justify-content:space-between;
+    font-size:11px;color:#707070}
+  .pr-footer strong{color:#3B62FF}
+}
+</style>
 </head>
 <body class="font-sans">
 <div id="root"></div>
@@ -41,6 +76,30 @@ const Card=({title,icon:Ic,children,action})=>(
  <div className="flex items-center justify-between mb-4"><h3 className="flex items-center gap-2 font-bold text-slate-800">{Ic&&<Ic size={18} className="text-brand"/>}{title}</h3>{action}</div>
  {children}
 </section>);
+
+/* Standalone, print-only report document. Hidden on screen; the only thing visible when printing. */
+function PrintReport({report}){
+ const winLines=(report.wins||'').split('\n').map(s=>s.trim()).filter(Boolean);
+ const generated=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+ return(<div className="print-report" aria-hidden="true">
+  <div className="pr-header">
+   <Logo size={64}/>
+   <div className="pr-brand"><div className="pr-brand-name">Skills 4Life</div><div className="pr-brand-sub">COACHING</div></div>
+  </div>
+  <h1 className="pr-title">Parent Session Report</h1>
+  <div className="pr-meta"><span><b>Session date:</b> {report.date}</span><span><b>Prepared for:</b> Parent / Guardian</span></div>
+  <div className="pr-section"><h2>Session Wins</h2>
+   {winLines.length?<ul>{winLines.map((w,i)=><li key={i}>{w}</li>)}</ul>:<p className="pr-empty">Nothing logged for this session.</p>}
+  </div>
+  <div className="pr-section"><h2>Next Focus</h2>
+   {report.focus?<p>{report.focus}</p>:<p className="pr-empty">Nothing logged for this session.</p>}
+  </div>
+  <div className="pr-section"><h2>Coach Notes</h2>
+   {report.note?<p>{report.note}</p>:<p className="pr-empty">No additional notes this session.</p>}
+  </div>
+  <div className="pr-footer"><span><strong>Skills 4Life Coaching</strong> · Executive function skills for life</span><span>Generated {generated}</span></div>
+ </div>);
+}
 
 const initTasks=[{id:1,t:'Finish science lab write-up',due:'Tue',done:false},{id:2,t:'Pack backpack the night before',due:'Daily',done:true},{id:3,t:'Break history project into 3 steps',due:'Thu',done:false},{id:4,t:'10-minute reading with notes',due:'Daily',done:false}];
 const initGoals=[{id:1,g:'Start homework within 15 minutes of arriving home',p:60},{id:2,g:'Use planner for every assignment',p:80},{id:3,g:'Ask for help before a deadline stress spike',p:35}];
@@ -74,10 +133,17 @@ function Student(){
 }
 
 function Parent({report,wins}){
- const dl=()=>{const txt=`SKILLS 4LIFE COACHING - PARENT REPORT\n=====================================\nSession date: ${report.date}\n\nWins this session:\n${report.wins}\n\nFocus for next time:\n${report.focus}\n\nNotes for parents:\n${report.note||'None'}\n`;
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='parent-report.txt';a.click()};
+ // Opens the browser print dialog showing ONLY the standalone report (see print CSS).
+ // Choose "Save as PDF" as the destination. The page title becomes the suggested file name.
+ const dl=()=>{
+  const prevTitle=document.title;
+  document.title='Skills4Life-Session-Report-'+String(report.date||'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  const restore=()=>{document.title=prevTitle;window.removeEventListener('afterprint',restore)};
+  window.addEventListener('afterprint',restore);
+  window.print();
+ };
  return(<div className="grid lg:grid-cols-2 gap-5">
- <Card title="Latest Session Update" icon={Users} action={report.visible&&<button onClick={dl} className="flex items-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-xl px-3 py-1.5"><Download size={15}/>Download report</button>}>
+ <Card title="Latest Session Update" icon={Users} action={report.visible&&<button onClick={dl} className="flex items-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-xl px-3 py-1.5"><Download size={15}/>Download Session Report</button>}>
   {report.visible?(<div className="space-y-4 text-slate-700"><p className="text-xs text-slate4">Session on {report.date}</p>
    <div><h4 className="font-bold text-slate-800 mb-1">Wins</h4><p className="whitespace-pre-wrap">{report.wins||'Nothing logged yet.'}</p></div>
    <div><h4 className="font-bold text-slate-800 mb-1">Focus for next time</h4><p className="whitespace-pre-wrap">{report.focus||'Nothing logged yet.'}</p></div>
@@ -120,17 +186,18 @@ function App(){
  const addWin=()=>{const n=report.wins.split('\n').map(s=>s.trim()).filter(Boolean).filter(s=>!wins.some(w=>w.t===s)).map(t=>({t,d:report.date}));setWins([...n,...wins])};
  const tabs=[['student','Student',GraduationCap],['parent','Parent',Users],['coach','Coach',ClipboardList]];
  return(<div className="min-h-screen">
-  <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+  <header className="no-print bg-white border-b border-slate-200 sticky top-0 z-10">
    <div className="max-w-6xl mx-auto px-5 py-3 flex flex-wrap items-center justify-between gap-3">
     <div className="flex items-center gap-3"><Logo/><div className="leading-tight"><div className="text-xl font-extrabold text-brand tracking-tight">Skills 4Life</div><div className="text-xs font-semibold text-slate4 tracking-[0.25em]">COACHING</div></div></div>
     <nav className="flex gap-1 bg-slate-100 rounded-xl p-1" role="tablist">{tabs.map(([k,l,Ic])=>(<button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)} className={'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition '+(tab===k?'bg-brand text-white shadow':'text-slate4 hover:text-slate-900')}><Ic size={16}/>{l}</button>))}</nav>
    </div></header>
-  <main className="max-w-6xl mx-auto px-5 py-8">
+  <main className="no-print max-w-6xl mx-auto px-5 py-8">
    <h1 className="text-2xl font-extrabold text-slate-800 mb-1">{tab==='student'?'Student Dashboard':tab==='parent'?'Parent Portal':'Coach Dashboard'}</h1>
    <p className="text-slate4 mb-6">{tab==='student'?'Your tasks, plans, and goals for this week.':tab==='parent'?'Progress, session updates, and wins.':'Log the session and choose what parents can see.'}</p>
    {tab==='student'&&<Student/>}{tab==='parent'&&<Parent report={report} wins={wins}/>}{tab==='coach'&&<Coach report={report} setReport={setReport} addWin={addWin}/>}
   </main>
-  <footer className="text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life</footer>
+  <footer className="no-print text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life</footer>
+  <PrintReport report={report}/>
  </div>);
 }
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
