@@ -19,8 +19,16 @@
 const {useState,useMemo}=React;
 const L=window.lucideReact||window.LucideReact||{};
 const I=(n)=>L[n]||(()=>null);
-const [CheckCircle2,Circle,Plus,Target,CalendarDays,ListChecks,Users,GraduationCap,ClipboardList,Download,Eye,EyeOff,Trophy,Send,Sparkles,Clock,LogOut,Lock,Mail]=
- ['CheckCircle2','Circle','Plus','Target','CalendarDays','ListChecks','Users','GraduationCap','ClipboardList','Download','Eye','EyeOff','Trophy','Send','Sparkles','Clock','LogOut','Lock','Mail'].map(I);
+const [CheckCircle2,Circle,Plus,Target,CalendarDays,ListChecks,Users,GraduationCap,ClipboardList,Download,Eye,EyeOff,Trophy,Send,Sparkles,Clock,LogOut,AlertCircle]=
+ ['CheckCircle2','Circle','Plus','Target','CalendarDays','ListChecks','Users','GraduationCap','ClipboardList','Download','Eye','EyeOff','Trophy','Send','Sparkles','Clock','LogOut','AlertCircle'].map(I);
+
+/* Mock user directory: stands in for a database lookup by email. */
+const USER_DIRECTORY={
+ 'student@skills4life.com':{role:'student',name:'Student'},
+ 'parent@skills4life.com':{role:'parent',name:'Parent'},
+ 'coach@skills4life.com':{role:'coach',name:'Coach'}
+};
+const lookupUser=(email)=>USER_DIRECTORY[email.trim().toLowerCase()]||null;
 
 const Logo=({size=48})=>(
 <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label="Skills 4Life Coaching logo">
@@ -61,6 +69,42 @@ const events={
 };
 const kindMeta={session:{label:'Session',Ic:Users},task:{label:'Task',Ic:ListChecks},goal:{label:'Goal',Ic:Target},log:{label:'Session log',Ic:ClipboardList}};
 const TODAY=2;
+
+function Login({onLogin}){
+ const [email,setEmail]=useState('');
+ const [password,setPassword]=useState('');
+ const [error,setError]=useState('');
+ const submit=(e)=>{
+  e.preventDefault();
+  const user=lookupUser(email);
+  if(!user){setError('Account not recognized. Please contact your Skills 4Life Coach to set up your private access.');return}
+  setError('');onLogin(user);
+ };
+ return(<div className="max-w-md mx-auto mt-6">
+ <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+  <div className="flex flex-col items-center text-center mb-6">
+   <Logo size={64}/>
+   <h1 className="text-2xl font-extrabold text-slate-800 mt-3">Sign in</h1>
+   <p className="text-slate4 text-sm mt-1">Use the email address your coach set up for you.</p>
+  </div>
+  <form onSubmit={submit} noValidate className="space-y-4">
+   <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Email</span>
+    <input type="email" autoComplete="username" value={email} onChange={e=>{setEmail(e.target.value);setError('')}} placeholder="you@example.com" aria-invalid={!!error} aria-describedby={error?'login-error':undefined} className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:border-brand"/></label>
+   <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Password</span>
+    <input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your password" className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:border-brand"/></label>
+   {error&&<div id="login-error" role="alert" className="flex gap-2 items-start bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm"><AlertCircle size={18} className="shrink-0 mt-0.5"/><p>{error}</p></div>}
+   <button type="submit" className="w-full bg-brand text-white font-semibold rounded-xl px-4 py-2.5 hover:bg-royal transition">Sign in</button>
+  </form>
+  <div className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate4">
+   <p className="font-semibold mb-1">Prototype test accounts (any password works):</p>
+   <ul className="space-y-0.5">
+    <li>Student: <span className="font-mono text-slate-700">student@skills4life.com</span></li>
+    <li>Parent: <span className="font-mono text-slate-700">parent@skills4life.com</span></li>
+    <li>Coach: <span className="font-mono text-slate-700">coach@skills4life.com</span></li>
+   </ul>
+  </div>
+ </section></div>);
+}
 
 function CalendarSection(){
  const [selectedDate,setSelectedDate]=useState(TODAY);
@@ -156,85 +200,26 @@ function Coach({report,setReport,addWin}){
  </Card></div>);
 }
 
-/* ---------- Login ---------- */
-const roleOptions=[
- {k:'student',label:'Student',Ic:GraduationCap,desc:'Tasks, planner, goals'},
- {k:'parent',label:'Parent',Ic:Users,desc:'Progress and reports'},
- {k:'coach',label:'Coach',Ic:ClipboardList,desc:'Session notes'}
-];
-const roleTitle={student:'Student Dashboard',parent:'Parent Portal',coach:'Coach Dashboard'};
-const roleSub={student:'Your tasks, plans, and goals for this week.',parent:'Progress, session updates, and wins.',coach:'Log the session and choose what parents can see.'};
-
-function Login({onSignIn}){
- const [email,setEmail]=useState('');
- const [password,setPassword]=useState('');
- const [role,setRole]=useState('student');
- const [show,setShow]=useState(false);
- const [error,setError]=useState('');
- const submit=(e)=>{
-  e.preventDefault();
-  if(!/^\S+@\S+\.\S+$/.test(email.trim())){setError('Please enter a valid email address.');return}
-  if(password.length<6){setError('Password must be at least 6 characters.');return}
-  setError('');
-  onSignIn({role,email:email.trim()});
- };
- return(<div className="min-h-screen flex items-center justify-center px-4 py-10">
-  <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl p-8">
-   <div className="flex flex-col items-center text-center mb-6">
-    <Logo size={72}/>
-    <div className="mt-3 text-2xl font-extrabold text-brand tracking-tight leading-none">Skills 4Life</div>
-    <div className="text-xs font-semibold text-slate4 tracking-[0.25em] mt-1">COACHING</div>
-    <p className="text-slate4 text-sm mt-4">Sign in to your portal</p>
-   </div>
-   <form onSubmit={submit} noValidate className="space-y-5">
-    <fieldset>
-     <legend className="block text-sm font-semibold text-slate-700 mb-2">I am signing in as</legend>
-     <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Role">
-      {roleOptions.map(({k,label,Ic,desc})=>{const sel=role===k;return(
-       <button key={k} type="button" role="radio" aria-checked={sel} onClick={()=>setRole(k)}
-        className={'flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-3 text-center transition '+(sel?'border-brand bg-brand/10 text-brand':'border-slate-200 text-slate-600 hover:border-slate-300')}>
-        <Ic size={22}/><span className="text-sm font-bold">{label}</span><span className="text-[11px] leading-tight text-slate4">{desc}</span>
-       </button>);})}
-     </div>
-    </fieldset>
-    <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Email</span>
-     <div className="relative"><Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
-      <input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" className="w-full border border-slate-300 rounded-xl pl-9 pr-3 py-2.5"/></div></label>
-    <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Password</span>
-     <div className="relative"><Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
-      <input type={show?'text':'password'} autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your password" className="w-full border border-slate-300 rounded-xl pl-9 pr-11 py-2.5"/>
-      <button type="button" onClick={()=>setShow(!show)} aria-label={show?'Hide password':'Show password'} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-slate-800 rounded-lg">{show?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></label>
-    <div aria-live="assertive" className="min-h-[1.25rem]">{error&&<p className="text-sm font-medium text-red-600">{error}</p>}</div>
-    <button type="submit" className="w-full bg-brand hover:bg-royal text-white font-bold rounded-xl py-3 transition">Sign In</button>
-   </form>
-   <p className="text-xs text-slate4 text-center mt-5">Prototype mode: any valid email and a password of 6+ characters will sign in.</p>
-  </div>
- </div>);
-}
-
 function App(){
- const [user,setUser]=useState(null); // null = signed out. {role,email} = signed in
+ /* The role comes only from the email lookup at sign-in; it cannot be changed from the UI afterward. */
+ const [user,setUser]=useState(null);
+ const role=user?user.role:null;
  const [report,setReport]=useState({date:'Nov 2, 2026',wins:'Started homework on time 3 days in a row.\nUsed the planner without a reminder.',focus:'Breaking the history project into smaller steps.',note:'',visible:true});
  const [wins,setWins]=useState([{t:'Turned in every assignment on time',d:'Oct 27'},{t:'Asked a teacher for help before the due date',d:'Oct 20'}]);
  const addWin=()=>{const n=report.wins.split('\n').map(s=>s.trim()).filter(Boolean).filter(s=>!wins.some(w=>w.t===s)).map(t=>({t,d:report.date}));setWins([...n,...wins])};
-
- if(!user) return <Login onSignIn={setUser}/>;
-
- const role=user.role;
- const RIc=(roleOptions.find(r=>r.k===role)||{}).Ic;
  return(<div className="min-h-screen">
   <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
    <div className="max-w-6xl mx-auto px-5 py-3 flex flex-wrap items-center justify-between gap-3">
     <div className="flex items-center gap-3"><Logo/><div className="leading-tight"><div className="text-xl font-extrabold text-brand tracking-tight">Skills 4Life</div><div className="text-xs font-semibold text-slate4 tracking-[0.25em]">COACHING</div></div></div>
-    <div className="flex items-center gap-3">
-     <div className="hidden sm:flex items-center gap-2 bg-brand/10 text-brand rounded-xl px-3 py-2 text-sm font-semibold">{RIc&&<RIc size={16}/>}<span className="capitalize">{role}</span><span className="text-slate4 font-medium">· {user.email}</span></div>
-     <button onClick={()=>setUser(null)} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold rounded-xl px-4 py-2 transition"><LogOut size={16}/>Sign Out</button>
-    </div>
+    {user&&<button onClick={()=>setUser(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 text-slate4 hover:text-slate-900 transition"><LogOut size={16}/>Sign out</button>}
    </div></header>
   <main className="max-w-6xl mx-auto px-5 py-8">
-   <h1 className="text-2xl font-extrabold text-slate-800 mb-1">{roleTitle[role]}</h1>
-   <p className="text-slate4 mb-6">{roleSub[role]}</p>
-   {role==='student'&&<Student/>}{role==='parent'&&<Parent report={report} wins={wins}/>}{role==='coach'&&<Coach report={report} setReport={setReport} addWin={addWin}/>}
+   {!user&&<Login onLogin={setUser}/>}
+   {user&&<>
+    <h1 className="text-2xl font-extrabold text-slate-800 mb-1">{role==='student'?'Student Dashboard':role==='parent'?'Parent Portal':'Coach Dashboard'}</h1>
+    <p className="text-slate4 mb-6">{role==='student'?'Your tasks, plans, and goals for this week.':role==='parent'?'Progress, session updates, and wins.':'Log the session and choose what parents can see.'}</p>
+    {role==='student'&&<Student/>}{role==='parent'&&<Parent report={report} wins={wins}/>}{role==='coach'&&<Coach report={report} setReport={setReport} addWin={addWin}/>}
+   </>}
   </main>
   <footer className="text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life</footer>
  </div>);
