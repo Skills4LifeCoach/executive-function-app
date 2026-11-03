@@ -16,7 +16,7 @@
 <body class="font-sans">
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useMemo}=React;
+const {useState,useMemo,useEffect}=React;
 const L=window.lucideReact||window.LucideReact||{};
 const I=(n)=>L[n]||(()=>null);
 const [CheckCircle2,Circle,Plus,Target,CalendarDays,ListChecks,Users,GraduationCap,ClipboardList,Download,Eye,EyeOff,Trophy,Send,Sparkles,Clock,LogOut,AlertCircle,ChevronLeft,ChevronRight,PartyPopper]=
@@ -51,13 +51,13 @@ const Card=({title,icon:Ic,children,action})=>(
 </section>);
 
 /* Dates are stored as ISO strings (YYYY-MM-DD) so the calendar can match them exactly. */
-const TODAY='2026-11-02';
 const pad=(n)=>String(n).padStart(2,'0');
 const iso=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;
 const parseISO=(s)=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const todayISO=()=>{const d=new Date();return iso(d.getFullYear(),d.getMonth(),d.getDate())};
 const fmtShort=(s)=>parseISO(s).toLocaleDateString('en-US',{month:'short',day:'numeric'});
 
-const initTasks=[{id:1,t:'Finish science lab write-up',due:'2026-11-05',done:false},{id:2,t:'Pack backpack the night before',due:'',done:true},{id:3,t:'Break history project into 3 steps',due:'2026-11-03',done:false},{id:4,t:'10-minute reading with notes',due:'',done:false}];
+const initTasks=[{id:1,t:'Finish science lab write-up',due:'2026-11-05',done:false},{id:2,t:'Pack backpack the night before',due:'',daily:true,doneOn:todayISO()},{id:3,t:'Break history project into 3 steps',due:'2026-11-03',done:false},{id:4,t:'10-minute reading with notes',due:'',daily:true,doneOn:''}];
 const initGoals=[{id:1,g:'Start homework within 15 minutes of arriving home',p:60,due:''},{id:2,g:'Use planner for every assignment',p:80,due:'2026-11-07'},{id:3,g:'Ask for help before a deadline stress spike',p:35,due:''}];
 const planner=[['Mon','Math practice set','4:00'],['Tue','Science lab write-up','4:30'],['Wed','Reading + notes','4:00'],['Thu','History project step 2','4:30'],['Fri','Weekly planner reset','3:45']];
 
@@ -114,13 +114,14 @@ function Login({onLogin}){
 }
 
 /* Shared by student and parent views: merges base events with logged tasks and core goals by due date. */
-function CalendarSection({tasks,goals}){
- const [selectedDate,setSelectedDate]=useState(TODAY);
- const [view,setView]=useState({y:2026,m:10});
- const eventsFor=(d)=>[
+function CalendarSection({tasks,goals,today}){
+ const [selectedDate,setSelectedDate]=useState(today);
+ const [view,setView]=useState({y:parseISO(today).getFullYear(),m:parseISO(today).getMonth()});
+ const eventsFor=(d,withDaily=true)=>[
   ...(baseEvents[d]||[]),
+  ...(withDaily&&d>=today?tasks.filter(t=>t.daily).map(t=>({k:'task',t:t.t,n:d===today&&t.done?'Completed today.':'Repeats daily.',done:d===today&&t.done})):[]),
   ...goals.filter(g=>g.due===d).map(g=>({k:'goal',t:g.g,n:g.done?'Completed.':`Progress: ${g.p}%`,done:g.done})),
-  ...tasks.filter(t=>t.due===d).map(t=>({k:'task',t:t.t,n:t.done?'Completed.':'Due this day.',done:t.done}))
+  ...tasks.filter(t=>!t.daily&&t.due===d).map(t=>({k:'task',t:t.t,n:t.done?'Completed.':'Due this day.',done:t.done}))
  ];
  const items=eventsFor(selectedDate);
  const label=parseISO(selectedDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
@@ -137,7 +138,7 @@ function CalendarSection({tasks,goals}){
   <div className="grid grid-cols-7 gap-1">{cells.map((d,i)=>{
    if(!d)return <div key={'b'+i}/>;
    const key=iso(view.y,view.m,d);
-   const sel=key===selectedDate,has=eventsFor(key).length>0,isToday=key===TODAY;
+   const sel=key===selectedDate,has=eventsFor(key,false).length>0,isToday=key===today;
    return(<button key={key} type="button" onClick={()=>setSelectedDate(key)} aria-pressed={sel}
     aria-label={parseISO(key).toLocaleDateString('en-US',{month:'long',day:'numeric'})+(has?', has items':'')+(isToday?', today':'')}
     className={'aspect-square rounded-full flex flex-col items-center justify-center text-sm transition cursor-pointer '+
@@ -149,7 +150,7 @@ function CalendarSection({tasks,goals}){
  </Card>
  <Card title="Schedule & Tasks for Selected Date" icon={ListChecks}>
   <div aria-live="polite">
-   <p className="font-bold text-royal mb-3">{label}{selectedDate===TODAY&&<span className="ml-2 text-xs font-semibold text-slate4">Today</span>}</p>
+   <p className="font-bold text-royal mb-3">{label}{selectedDate===today&&<span className="ml-2 text-xs font-semibold text-slate4">Today</span>}</p>
    {items.length===0
     ?<div className="text-center py-10 text-slate4"><CalendarDays className="mx-auto mb-2" size={28}/><p>No sessions or tasks scheduled for this day.</p></div>
     :<ul className="space-y-3">{items.map((it,i)=>{const M=kindMeta[it.k];return(
@@ -166,28 +167,32 @@ function LogForm({onAdd}){
  const [title,setTitle]=useState('');
  const [due,setDue]=useState('');
  const [core,setCore]=useState(false);
+ const [daily,setDaily]=useState(false);
  const [msg,setMsg]=useState('');
  const [err,setErr]=useState('');
  const submit=(e)=>{
   e.preventDefault();
   if(!title.trim()){setErr('Enter a task title, like "Math Worksheet Pg 45".');setMsg('');return}
-  onAdd({title:title.trim(),due,core});
-  setMsg(core?'Added to My Core Goals.':'Added to Task List.'+(due?' It now shows on the calendar.':''));
-  setErr('');setTitle('');setDue('');setCore(false);
+  onAdd({title:title.trim(),due,core,daily:daily&&!core});
+  setMsg(core?'Added to My Core Goals.':daily?'Added to Task List. It repeats every day.':'Added to Task List.'+(due?' It now shows on the calendar.':''));
+  setErr('');setTitle('');setDue('');setCore(false);setDaily(false);
  };
  const inp="w-full border border-slate-300 rounded-xl px-3 py-2 focus:border-brand bg-white";
- return(<div className="lg:col-span-2"><Card title="Log New Assignment or Habit" icon={Plus}>
+ return(<div className="lg:col-span-2"><Card title="Log New Assignment or Task" icon={Plus}>
   <form onSubmit={submit} noValidate className="space-y-4">
    <div className="grid md:grid-cols-[1fr_190px_auto] gap-3 items-end">
     <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Task Title</span>
      <input value={title} onChange={e=>{setTitle(e.target.value);setErr('');setMsg('')}} placeholder="e.g., Math Worksheet Pg 45" aria-invalid={!!err} className={inp}/></label>
     <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Due Date</span>
-     <input type="date" value={due} onChange={e=>{setDue(e.target.value);setMsg('')}} className={inp}/></label>
+     <input type="date" value={due} disabled={daily&&!core} onChange={e=>{setDue(e.target.value);setMsg('')}} className={inp+(daily&&!core?' opacity-50':'')}/></label>
     <button type="submit" className="flex items-center justify-center gap-1.5 bg-brand text-white font-semibold rounded-xl px-5 py-2.5 hover:bg-royal transition">{core?'Add Core Goal':'Add Task'}</button>
    </div>
    <button type="button" role="switch" aria-checked={core} onClick={()=>setCore(!core)} className={'w-full flex items-center gap-3 text-left rounded-xl border p-3 transition '+(core?'border-brand bg-brand/5':'border-slate-200 bg-slate-50')}>
     <span className={'w-11 h-6 rounded-full p-0.5 transition shrink-0 '+(core?'bg-brand':'bg-slate-300')}><span className={'block w-5 h-5 bg-white rounded-full transition '+(core?'translate-x-5':'')}/></span>
     <span className="text-sm font-semibold text-slate-800">Is this a high-level milestone or core goal?</span></button>
+   {!core&&<button type="button" role="switch" aria-checked={daily} onClick={()=>{setDaily(!daily);setMsg('')}} className={'w-full flex items-center gap-3 text-left rounded-xl border p-3 transition '+(daily?'border-brand bg-brand/5':'border-slate-200 bg-slate-50')}>
+    <span className={'w-11 h-6 rounded-full p-0.5 transition shrink-0 '+(daily?'bg-brand':'bg-slate-300')}><span className={'block w-5 h-5 bg-white rounded-full transition '+(daily?'translate-x-5':'')}/></span>
+    <span className="text-sm font-semibold text-slate-800">Repeat every day?</span></button>}
    <div aria-live="polite">
     {err&&<p role="alert" className="text-sm text-red-700">{err}</p>}
     {msg&&<p className="text-sm font-semibold text-green-700">{msg}</p>}
@@ -195,16 +200,16 @@ function LogForm({onAdd}){
   </form></Card></div>);
 }
 
-function Student({tasks,setTasks,goals,setGoals,addItem}){
+function Student({tasks,toggleTask,goals,setGoals,addItem,today}){
  const done=tasks.filter(t=>t.done).length;
- const toggle=(id)=>setTasks(tasks.map(x=>x.id===id?{...x,done:!x.done}:x));
+ const toggle=toggleTask;
  return(<div className="grid lg:grid-cols-2 gap-5">
  <Card title="Task List" icon={ListChecks} action={<span className="text-sm text-slate4">{done}/{tasks.length} done</span>}>
   {tasks.length>0&&done===tasks.length&&<div className="pop flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 font-semibold rounded-xl p-3 mb-3 text-sm"><PartyPopper size={18}/>Every task is done. Great work!</div>}
   <ul className="space-y-2">{tasks.map(t=>(<li key={t.id}><button role="checkbox" aria-checked={t.done} onClick={()=>toggle(t.id)} className={'w-full flex items-center gap-3 p-3 rounded-xl text-left transition '+(t.done?'bg-green-50 border border-green-200':'hover:bg-slate-50 border border-transparent')}>
    {t.done?<CheckCircle2 className="text-green-500 pop" size={22}/>:<Circle className="text-slate-400" size={22}/>}
    <span className={'flex-1 '+(t.done?'line-through text-slate-400':'text-slate-800')}>{t.t}</span>
-   {t.done?<DoneBadge/>:<span className="text-xs text-slate4">{t.due?'Due '+fmtShort(t.due):'Daily'}</span>}</button></li>))}</ul>
+   {t.done?<DoneBadge/>:<span className="text-xs text-slate4">{t.daily?'Daily':t.due?'Due '+fmtShort(t.due):'Anytime'}</span>}</button></li>))}</ul>
  </Card>
  <Card title="My Core Goals" icon={Target}>
   <div className="space-y-4">{goals.map(g=>(<div key={g.id}><div className="flex justify-between gap-3 text-sm mb-1"><span className="font-medium text-slate-700">{g.g}{g.due&&<span className="ml-2 text-xs text-slate4">Due {fmtShort(g.due)}</span>}</span><span className={(g.p===100?'text-green-600':'text-brand')+' font-bold'}>{g.p===100?'Reached! 🎉':g.p+'%'}</span></div>
@@ -214,11 +219,11 @@ function Student({tasks,setTasks,goals,setGoals,addItem}){
  <Card title="Weekly Planner" icon={ClipboardList}>
   <div className="divide-y divide-slate-100">{planner.map(([d,t,tm])=>(<div key={d} className="flex items-center gap-4 py-2.5"><span className="w-12 font-bold text-brand">{d}</span><span className="flex-1 text-slate-700">{t}</span><span className="flex items-center gap-1 text-xs text-slate4"><Clock size={13}/>{tm} pm</span></div>))}</div>
  </Card>
- <CalendarSection tasks={tasks} goals={goals}/>
+ <CalendarSection tasks={tasks} goals={goals} today={today}/>
  <LogForm onAdd={addItem}/></div>);
 }
 
-function Parent({report,wins,tasks,goals}){
+function Parent({report,wins,tasks,goals,today}){
  const dl=()=>{const txt=`SKILLS 4LIFE COACHING - PARENT REPORT\n=====================================\nSession date: ${report.date}\n\nWins this session:\n${report.wins}\n\nFocus for next time:\n${report.focus}\n\nNotes for parents:\n${report.note||'None'}\n`;
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='parent-report.txt';a.click()};
  return(<div className="grid lg:grid-cols-2 gap-5">
@@ -235,7 +240,7 @@ function Parent({report,wins,tasks,goals}){
  <Card title="Session Log" icon={ClipboardList}>
   <div className="divide-y divide-slate-100">{[['Oct 27','Built a Sunday planner routine'],['Oct 20','Practiced breaking big projects into steps'],['Oct 13','Set up a homework-start timer']].map(([d,t])=>(<div key={d} className="flex gap-4 py-2.5"><span className="w-16 font-bold text-brand">{d}</span><span className="text-slate-700">{t}</span></div>))}</div>
  </Card>
- <CalendarSection tasks={tasks} goals={goals}/></div>);
+ <CalendarSection tasks={tasks} goals={goals} today={today}/></div>);
 }
 
 function Coach({report,setReport,addWin}){
@@ -267,11 +272,16 @@ function App(){
  const [wins,setWins]=useState([{t:'Turned in every assignment on time',d:'Oct 27'},{t:'Asked a teacher for help before the due date',d:'Oct 20'}]);
  /* Shared app memory: tasks and core goals live here so the student, parent, and calendar views all read the same data. */
  const [tasks,setTasks]=useState(initTasks);
+ const [today,setToday]=useState(todayISO());
+ useEffect(()=>{const id=setInterval(()=>setToday(todayISO()),60000);return()=>clearInterval(id)},[]);
+ /* Daily tasks are done only for the day they were checked off, so they reset each morning. */
+ const view=tasks.map(t=>t.daily?{...t,done:t.doneOn===today}:t);
+ const toggleTask=(id)=>setTasks(ts=>ts.map(t=>t.id!==id?t:t.daily?{...t,doneOn:t.doneOn===today?'':today}:{...t,done:!t.done}));
  const [goals,setGoals]=useState(initGoals);
- const addItem=({title,due,core})=>{
+ const addItem=({title,due,core,daily})=>{
   const id=Date.now();
   if(core)setGoals(g=>[...g,{id,g:title,p:0,due,done:false}]);
-  else setTasks(t=>[...t,{id,t:title,due,done:false}]);
+  else setTasks(t=>[...t,daily?{id,t:title,due:'',daily:true,doneOn:''}:{id,t:title,due,done:false}]);
  };
  const addWin=()=>{const n=report.wins.split('\n').map(s=>s.trim()).filter(Boolean).filter(s=>!wins.some(w=>w.t===s)).map(t=>({t,d:report.date}));setWins([...n,...wins])};
  return(<div className="min-h-screen">
@@ -285,8 +295,8 @@ function App(){
    {user&&<>
     <h1 className="text-2xl font-extrabold text-slate-800 mb-1">{role==='student'?'Student Dashboard':role==='parent'?'Parent Portal':'Coach Dashboard'}</h1>
     <p className="text-slate4 mb-6">{role==='student'?'Your tasks, plans, and goals for this week.':role==='parent'?'Progress, session updates, and wins.':'Log the session and choose what parents can see.'}</p>
-    {role==='student'&&<Student tasks={tasks} setTasks={setTasks} goals={goals} setGoals={setGoals} addItem={addItem}/>}
-    {role==='parent'&&<Parent report={report} wins={wins} tasks={tasks} goals={goals}/>}
+    {role==='student'&&<Student tasks={view} toggleTask={toggleTask} goals={goals} setGoals={setGoals} addItem={addItem} today={today}/>}
+    {role==='parent'&&<Parent report={report} wins={wins} tasks={view} goals={goals} today={today}/>}
     {role==='coach'&&<Coach report={report} setReport={setReport} addWin={addWin}/>}
    </>}
   </main>
