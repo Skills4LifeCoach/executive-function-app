@@ -244,6 +244,7 @@ function GoalCard({goal,toggleStep,addStep,removeStep}){
  return(<div className={'rounded-xl border p-4 transition '+(s.achieved?'border-green-300 bg-green-50':'border-slate-200 bg-white')}>
   <div className="flex items-start justify-between gap-3 mb-2">
    <div className="min-w-0">
+    {goal.assigned&&<span className="inline-block text-xs font-bold bg-brand/10 text-brand rounded-full px-2 py-0.5 mb-1">Assigned by your coach</span>}
     <p className="font-semibold text-slate-800">{goal.g}</p>
     {goal.due&&<p className="text-xs text-slate4 mt-0.5">Due {fmtShort(goal.due)}</p>}
    </div>
@@ -331,7 +332,63 @@ function Switch({on,toggle,label,hint}){
   <span><span className="block font-semibold text-slate-800">{label}</span><span className="block text-xs text-slate4">{hint}</span></span></button>);
 }
 
-function Coach({report,setReport,saveSession,sessions}){
+/* Coach panel: build a goal with a title, due date, and any number of action steps, then push it into the shared goals array. */
+function GoalAssigner({onAssign,goals}){
+ const [title,setTitle]=useState('');
+ const [due,setDue]=useState('');
+ const [stepText,setStepText]=useState('');
+ const [steps,setSteps]=useState([]);
+ const [msg,setMsg]=useState('');
+ const [err,setErr]=useState('');
+ const clear=()=>{setMsg('');setErr('')};
+ const addStep=()=>{const t=stepText.trim();if(!t)return;setSteps(s=>[...s,{id:newId(),t}]);setStepText('');clear()};
+ const removeStep=(id)=>{setSteps(s=>s.filter(x=>x.id!==id));clear()};
+ const submit=(e)=>{
+  e.preventDefault();
+  if(!title.trim()){setErr('Enter a goal title, like "Master Semester Study Schedule".');setMsg('');return}
+  const all=[...steps.map(s=>s.t),...(stepText.trim()?[stepText.trim()]:[])];
+  if(all.length===0){setErr('Add at least one action step so the student has a progress bar to fill.');setMsg('');return}
+  onAssign({title:title.trim(),due,steps:all});
+  setMsg(`Assigned "${title.trim()}" with ${all.length} action step${all.length===1?'':'s'}. Switch to the student account to see it.`);
+  setErr('');setTitle('');setDue('');setStepText('');setSteps([]);
+ };
+ const inp="w-full border border-slate-300 rounded-xl px-3 py-2 focus:border-brand bg-white";
+ return(<Card title="🎯 Assign New Student Goal" icon={Target}>
+  <form onSubmit={submit} noValidate className="space-y-4">
+   <div className="grid md:grid-cols-[1fr_200px] gap-3">
+    <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Goal Title</span>
+     <input value={title} onChange={e=>{setTitle(e.target.value);clear()}} placeholder="e.g., Master Semester Study Schedule" aria-invalid={!!err&&!title.trim()} className={inp}/></label>
+    <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Target Due Date</span>
+     <input type="date" value={due} onChange={e=>{setDue(e.target.value);clear()}} className={inp}/></label>
+   </div>
+   <div>
+    <span className="block text-sm font-semibold text-slate-700 mb-1">Action Steps / Milestones</span>
+    <div className="flex gap-2">
+     <input value={stepText} onChange={e=>{setStepText(e.target.value);clear()}} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addStep()}}} aria-label="New action step" placeholder="Type a step and press Enter or Add Step" className={inp}/>
+     <button type="button" onClick={addStep} className="flex items-center gap-1 bg-slate-100 text-brand font-semibold rounded-xl px-4 py-2 hover:bg-brand/10 transition shrink-0"><Plus size={16}/>Add Step</button>
+    </div>
+    {steps.length>0&&<ol className="mt-3 space-y-1.5">{steps.map((s,i)=>(<li key={s.id} className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+     <span className="font-bold text-brand w-5">{i+1}.</span><span className="flex-1 text-slate-800">{s.t}</span>
+     <button type="button" onClick={()=>removeStep(s.id)} aria-label={'Remove step: '+s.t} className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50"><X size={14}/></button></li>))}</ol>}
+    <p className="text-xs text-slate4 mt-2">The student’s progress bar is calculated from these steps as they check them off.</p>
+   </div>
+   <div className="flex flex-wrap items-center gap-3">
+    <button type="submit" className="flex items-center gap-2 bg-brand text-white font-semibold rounded-xl px-4 py-2 hover:bg-royal transition"><Send size={16}/>Assign Goal to Student</button>
+    <span aria-live="polite" className="text-sm">{err?<span role="alert" className="text-red-700">{err}</span>:<span className="text-green-700 font-medium">{msg}</span>}</span>
+   </div>
+  </form>
+  <div className="mt-5 pt-4 border-t border-slate-100">
+   <h4 className="text-sm font-bold text-slate-800 mb-2">Student’s Current Goals</h4>
+   {goals.length===0?<p className="text-sm text-slate4">No goals yet.</p>
+   :<ul className="space-y-3">{goals.map(g=>{const s=goalStats(g);return(<li key={g.id}>
+    <div className="flex justify-between items-center gap-3 text-sm mb-1"><span className="font-medium text-slate-700">{g.g}{g.assigned&&<span className="ml-2 text-xs font-semibold text-brand">Coach-assigned</span>}</span><span className="font-bold text-brand shrink-0">{s.achieved?'Achieved 🎉':s.pct+'%'}</span></div>
+    <div className="h-2 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={s.pct} aria-label={'Progress for '+g.g}><div className={'h-full rounded-full transition-all '+(s.achieved?'bg-green-500':'bg-brand')} style={{width:s.pct+'%'}}/></div>
+    <p className="text-xs text-slate4 mt-1">{s.done} of {s.total} action steps done{g.due?' · Due '+fmtShort(g.due):''}</p></li>);})}</ul>}
+  </div>
+ </Card>);
+}
+
+function Coach({report,setReport,saveSession,sessions,goals,assignGoal}){
  const [msg,setMsg]=useState('');
  const [err,setErr]=useState('');
  const set=(k,v)=>{setReport({...report,[k]:v});setMsg('');setErr('')};
@@ -364,7 +421,8 @@ function Coach({report,setReport,saveSession,sessions}){
   <div className="divide-y divide-slate-100">{sessions.map(x=>(<div key={x.id} className="py-2.5"><div className="flex items-center justify-between gap-2"><span className="font-bold text-brand">{fmtShort(x.date)}</span>
    <span className="flex gap-1 flex-wrap justify-end">{(badge(x).length?badge(x):['Coach only']).map(b=><span key={b} className="text-xs font-semibold bg-brand/10 text-brand rounded-full px-2 py-0.5">{b}</span>)}</span></div>
    <p className="text-sm text-slate-700 mt-1">{x.wins.split('\n')[0]||x.focus}</p></div>))}</div>
- </Card></div></div>);
+ </Card></div>
+ <div className="lg:col-span-3"><GoalAssigner onAssign={assignGoal} goals={goals}/></div></div>);
 }
 
 function App(){
@@ -376,7 +434,7 @@ function App(){
  const [report,setReport]=useState(blank());
  const [sessions,setSessions]=useState(initSessions);
  const [wins,setWins]=useState([{t:'Turned in every assignment on time',d:'Oct 27'},{t:'Asked a teacher for help before the due date',d:'Oct 20'}]);
- /* Shared app memory: tasks and core goals live here so the student, parent, and calendar views all read the same data. */
+ /* Shared app memory: tasks and core goals live here so the student, parent, coach, and calendar views all read the same data. */
  const [tasks,setTasks]=useState(initTasks);
  const [today,setToday]=useState(todayISO());
  useEffect(()=>{const id=setInterval(()=>setToday(todayISO()),60000);return()=>clearInterval(id)},[]);
@@ -393,6 +451,8 @@ function App(){
   if(core)setGoals(g=>[...g,{id,g:title,due,steps:(steps||[]).map(t=>({id:newId(),t,done:false}))}]);
   else setTasks(t=>[...t,daily?{id,t:title,due:'',daily:true,doneOn:''}:{id,t:title,due,done:false}]);
  };
+ /* Coach pipeline: pushes a goal flagged `assigned` into the same array the student, parent, and calendar read. */
+ const assignGoal=({title,due,steps})=>setGoals(g=>[...g,{id:newId(),g:title,due,assigned:true,steps:steps.map(t=>({id:newId(),t,done:false}))}]);
  const saveSession=()=>{
   const e={id:Date.now(),date:report.date,wins:report.wins.trim(),focus:report.focus.trim(),note:report.note.trim(),toParent:report.toParent,toStudent:report.toStudent};
   setSessions(x=>[e,...x].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id));
@@ -409,10 +469,10 @@ function App(){
    {!user&&<Login onLogin={setUser}/>}
    {user&&<>
     <h1 className="text-2xl font-extrabold text-slate-800 mb-1">{role==='student'?'Student Dashboard':role==='parent'?'Parent Portal':'Coach Dashboard'}</h1>
-    <p className="text-slate4 mb-6">{role==='student'?'Your tasks, plans, and goals for this week.':role==='parent'?'Progress, session updates, and wins.':'Log the session and choose what parents can see.'}</p>
+    <p className="text-slate4 mb-6">{role==='student'?'Your tasks, plans, and goals for this week.':role==='parent'?'Progress, session updates, and wins.':'Log the session, assign goals, and choose what parents can see.'}</p>
     {role==='student'&&<Student tasks={view} toggleTask={toggleTask} goals={goals} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep} addItem={addItem} today={today} sessions={sessions.filter(x=>x.toStudent)}/>}
     {role==='parent'&&<Parent sessions={sessions.filter(x=>x.toParent)} wins={wins} tasks={view} goals={goals} today={today}/>}
-    {role==='coach'&&<Coach report={report} setReport={setReport} saveSession={saveSession} sessions={sessions}/>}
+    {role==='coach'&&<Coach report={report} setReport={setReport} saveSession={saveSession} sessions={sessions} goals={goals} assignGoal={assignGoal}/>}
    </>}
   </main>
   <footer className="text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life</footer>
