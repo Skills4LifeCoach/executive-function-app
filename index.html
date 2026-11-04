@@ -11,7 +11,7 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/lucide-react@0.383.0/dist/umd/lucide-react.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
-<style>body{background:#F4F6FB;color:#1f2433}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #3B62FF;outline-offset:2px}@keyframes pop{0%{transform:scale(.8)}60%{transform:scale(1.12)}100%{transform:scale(1)}}.pop{animation:pop .35s ease-out}@media (prefers-reduced-motion:reduce){.pop{animation:none}}
+<style>body{background:#F4F6FB;color:#1f2433}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #3B62FF;outline-offset:2px}@keyframes pop{0%{transform:scale(.8)}60%{transform:scale(1.12)}100%{transform:scale(1)}}.pop{animation:pop .35s ease-out}@media (prefers-reduced-motion:reduce){.pop{animation:none}}
 @media print{body{background:#fff}.no-print{display:none!important}header{position:static!important}.print-hide-cal{display:none!important}section{break-inside:avoid;box-shadow:none!important}}</style>
 </head>
 <body class="font-sans">
@@ -20,8 +20,8 @@
 const {useState,useEffect}=React;
 const L=window.lucideReact||window.LucideReact||{};
 const I=(n)=>L[n]||(()=>null);
-const [CheckCircle2,Circle,Plus,Target,CalendarDays,ListChecks,Users,ClipboardList,Download,Eye,EyeOff,Trophy,Send,Sparkles,LogOut,AlertCircle,ChevronLeft,ChevronRight,X,Printer]=
- ['CheckCircle2','Circle','Plus','Target','CalendarDays','ListChecks','Users','ClipboardList','Download','Eye','EyeOff','Trophy','Send','Sparkles','LogOut','AlertCircle','ChevronLeft','ChevronRight','X','Printer'].map(I);
+const [CheckCircle2,Circle,Plus,Target,CalendarDays,ListChecks,Users,ClipboardList,Download,Eye,EyeOff,Trophy,Send,Sparkles,LogOut,AlertCircle,ChevronLeft,ChevronRight,X,Printer,BookOpen,Repeat,Flame,Star]=
+ ['CheckCircle2','Circle','Plus','Target','CalendarDays','ListChecks','Users','ClipboardList','Download','Eye','EyeOff','Trophy','Send','Sparkles','LogOut','AlertCircle','ChevronLeft','ChevronRight','X','Printer','BookOpen','Repeat','Flame','Star'].map(I);
 
 /* Mock user directory: stands in for a database lookup by email. */
 const USER_DIRECTORY={
@@ -47,7 +47,7 @@ const Logo=({size=48})=>(
 
 const Card=({title,icon:Ic,children,action})=>(
 <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
- <div className="flex items-center justify-between mb-4"><h3 className="flex items-center gap-2 font-bold text-slate-800">{Ic&&<Ic size={18} className="text-brand"/>}{title}</h3>{action}</div>
+ <div className="flex items-center justify-between mb-4 gap-3 flex-wrap"><h3 className="flex items-center gap-2 font-bold text-slate-800">{Ic&&<Ic size={18} className="text-brand"/>}{title}</h3>{action}</div>
  {children}
 </section>);
 
@@ -55,7 +55,8 @@ const Card=({title,icon:Ic,children,action})=>(
 const pad=(n)=>String(n).padStart(2,'0');
 const iso=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;
 const parseISO=(s)=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
-const todayISO=()=>{const d=new Date();return iso(d.getFullYear(),d.getMonth(),d.getDate())};
+const dateToISO=(d)=>iso(d.getFullYear(),d.getMonth(),d.getDate());
+const todayISO=()=>dateToISO(new Date());
 const fmtShort=(s)=>parseISO(s).toLocaleDateString('en-US',{month:'short',day:'numeric'});
 
 /* Goal progress is never stored. It is always calculated from the goal's action steps. */
@@ -66,6 +67,20 @@ const goalStats=(g)=>{
  return {total,done,pct,achieved:total>0&&done===total};
 };
 const newId=()=>Date.now()+Math.floor(Math.random()*100000);
+
+/* Homework, daily tasks and habits. Daily items (and all habits) reset every day: completion is stored per date in doneDates. */
+const isDoneToday=(x,today)=>x.daily?x.doneDates.includes(today):x.done;
+const streakOf=(x,today)=>{
+ let n=0;const d=parseISO(today);
+ if(!x.doneDates.includes(today))d.setDate(d.getDate()-1);
+ while(x.doneDates.includes(dateToISO(d))){n++;d.setDate(d.getDate()-1)}
+ return n;
+};
+const typeMeta={
+ homework:{label:'Homework',plural:'Homework Assignments'},
+ task:{label:'Daily Task',plural:'Daily Tasks'},
+ habit:{label:'Habit',plural:'Habit Entries'}
+};
 
 const initGoals=[
  {id:1,g:'Start homework within 15 minutes of arriving home',due:'',steps:[
@@ -86,14 +101,18 @@ const initGoals=[
   {id:303,t:'Ask for help at least 2 days before a due date',done:false}]}
 ];
 
-/* Fixed calendar items (sessions, reminders). Student goals and coach session logs are merged in live. */
+const initTasks=[
+ {id:1001,t:'History project: draft the outline',type:'homework',date:'2026-11-12',daily:false,core:true,done:false,doneDates:[]},
+ {id:1002,t:'Study for the quiz (10 minutes)',type:'homework',date:'2026-11-19',daily:false,core:false,done:false,doneDates:[]},
+ {id:1003,t:'Pack backpack for tomorrow',type:'task',date:'2026-11-02',daily:true,core:false,done:false,doneDates:['2026-11-02','2026-11-03']},
+ {id:1004,t:'Read for 10 minutes',type:'habit',date:'2026-11-02',daily:true,core:false,done:false,doneDates:['2026-11-02','2026-11-03']}
+];
+
+/* Fixed calendar items (coaching sessions, project deadline). Student goals, tasks and coach session logs are merged in live. */
 const baseEvents=Object.fromEntries(Object.entries({
- 3:[{k:'session',t:'Coaching session',n:'4:00 pm. Review the weekly planner and the homework-start timer.'}],
- 7:[{k:'task',t:'Weekly planner reset',n:'15 minutes: clear last week, add next week.'}],
+ 3:[{k:'session',t:'Coaching session',n:'4:00 pm. Review homework and the homework-start timer.'}],
  10:[{k:'session',t:'Coaching session',n:'4:00 pm. Check progress on the history project.'}],
- 12:[{k:'task',t:'History project step 2',n:'Draft the outline.'}],
  17:[{k:'session',t:'Coaching session',n:'4:00 pm. Goal review.'}],
- 19:[{k:'task',t:'Quiz',n:'Study for 10 minutes each night this week.'}],
  24:[{k:'session',t:'Coaching session',n:'4:00 pm. Plan the project wrap-up.'}],
  26:[{k:'task',t:'History project due',n:'Final check: all three steps done.'}]
 }).map(([d,v])=>[iso(2026,10,+d),v]));
@@ -102,7 +121,13 @@ const initSessions=[
  {id:3,date:'2026-10-27',wins:'Built a Sunday planner routine',focus:'',note:'',toParent:true,toStudent:true},
  {id:2,date:'2026-10-20',wins:'Practiced breaking big projects into steps',focus:'',note:'',toParent:true,toStudent:true},
  {id:1,date:'2026-10-13',wins:'Set up a homework-start timer',focus:'',note:'',toParent:true,toStudent:true}];
-const kindMeta={session:{label:'Session',Ic:Users},task:{label:'Reminder',Ic:ListChecks},goal:{label:'Core goal',Ic:Target},log:{label:'Session log',Ic:ClipboardList}};
+const kindMeta={
+ session:{label:'Session',Ic:Users},
+ task:{label:'Daily task',Ic:ListChecks},
+ homework:{label:'Homework',Ic:BookOpen},
+ habit:{label:'Habit',Ic:Repeat},
+ goal:{label:'Core goal',Ic:Target},
+ log:{label:'Session log',Ic:ClipboardList}};
 
 const DoneBadge=()=>(<span className="pop inline-flex items-center gap-1 bg-green-500 text-white text-xs font-bold rounded-full px-2.5 py-1 shrink-0"><CheckCircle2 size={13}/>Done!</span>);
 
@@ -142,12 +167,22 @@ function Login({onLogin}){
  </section></div>);
 }
 
-/* Shared by student and parent views. The student passes sessions=[] so no session-log text appears there. */
-function CalendarSection({goals,today,sessions}){
+/* Shared by student and parent views. The student passes sessions=[] so no session-log text appears there. Only the student passes tasks. */
+function CalendarSection({goals,today,sessions,tasks=[]}){
  const [selectedDate,setSelectedDate]=useState(today);
  const [view,setView]=useState({y:parseISO(today).getFullYear(),m:parseISO(today).getMonth()});
+ const taskEvents=(d)=>tasks.flatMap(x=>{
+  if(x.daily){
+   if(x.doneDates.includes(d))return [{k:x.type,t:x.t,n:x.type==='habit'?'Habit completed':'Daily task completed',done:true}];
+   if(x.date===d)return [{k:x.type,t:x.t,n:'Starts today and repeats every day.',done:false}];
+   return [];
+  }
+  if(x.date===d)return [{k:x.type,t:x.t,n:x.done?'Completed':'Due today',done:x.done}];
+  return [];
+ });
  const eventsFor=(d)=>[
   ...(baseEvents[d]||[]),
+  ...taskEvents(d),
   ...sessions.filter(x=>x.date===d).map(x=>({k:'log',t:'Session logged',n:x.wins.split('\n')[0]||x.focus})),
   ...goals.filter(g=>g.due===d).map(g=>{const s=goalStats(g);return {k:'goal',t:g.g,n:s.achieved?'Goal achieved! 🎉':`Progress: ${s.pct}% (${s.done} of ${s.total} action steps)`,done:s.achieved}})
  ];
@@ -270,8 +305,86 @@ function GoalCard({goal,toggleStep,addStep,removeStep}){
  </div>);
 }
 
-/* Student view: only the goal form, My Core Goals, and the calendar with its schedule. */
-function Student({goals,toggleStep,addStep,removeStep,addGoal,today}){
+/* Student Task List: homework assignments, daily tasks and habit entries with checkboxes. Daily items reset every day. */
+function TaskList({tasks,today,toggleTask,removeTask}){
+ const [filter,setFilter]=useState('all');
+ const shown=tasks.filter(x=>filter==='all'||x.type===filter)
+  .slice().sort((a,b)=>(isDoneToday(a,today)-isDoneToday(b,today))||((a.date||'9999').localeCompare(b.date||'9999')));
+ const doneCount=tasks.filter(x=>isDoneToday(x,today)).length;
+ const tabs=[['all','All'],['homework','Homework'],['task','Daily Tasks'],['habit','Habits']];
+ return(<Card title="Task List: Homework, Daily Tasks & Habits" icon={ListChecks} action={<span className="text-xs font-semibold text-slate4">{doneCount} of {tasks.length} done today</span>}>
+  <div role="tablist" aria-label="Filter task list" className="flex flex-wrap gap-1.5 mb-4">{tabs.map(([k,l])=>(
+   <button key={k} type="button" role="tab" aria-selected={filter===k} onClick={()=>setFilter(k)} className={'px-3 py-1.5 rounded-full text-sm font-semibold transition '+(filter===k?'bg-brand text-white':'bg-slate-100 text-slate4 hover:text-slate-900')}>{l}</button>))}</div>
+  {shown.length===0
+   ?<p className="text-sm text-slate4 py-6 text-center">Nothing here yet. Use the form under the calendar to log an assignment, task or habit.</p>
+   :<ul className="space-y-1.5">{shown.map(x=>{
+    const done=isDoneToday(x,today);const M=kindMeta[x.type];const st=x.daily?streakOf(x,today):0;
+    return(<li key={x.id} className="flex items-center gap-1">
+     <button type="button" role="checkbox" aria-checked={done} onClick={()=>toggleTask(x.id)} className={'flex-1 min-w-0 flex items-center gap-3 p-2.5 rounded-xl border text-left transition '+(done?'bg-green-50 border-green-200':'bg-white border-slate-200 hover:bg-slate-50')}>
+      {done?<CheckCircle2 className="text-green-500 shrink-0" size={22}/>:<Circle className="text-slate-400 shrink-0" size={22}/>}
+      <span className="min-w-0 flex-1">
+       <span className={'block font-semibold '+(done?'line-through text-slate-400':'text-slate-800')}>{x.t}</span>
+       <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate4 mt-0.5">
+        <span className="inline-flex items-center gap-1 font-semibold text-brand"><M.Ic size={12}/>{typeMeta[x.type].label}</span>
+        {x.daily?<span>Repeats daily</span>:(x.date&&<span>Due {fmtShort(x.date)}</span>)}
+        {x.core&&<span className="inline-flex items-center gap-1 font-semibold text-royal"><Star size={12}/>Core</span>}
+        {x.daily&&st>0&&<span className="inline-flex items-center gap-1 font-semibold text-orange-600"><Flame size={12}/>{st}-day streak</span>}
+       </span>
+      </span>
+     </button>
+     <button type="button" onClick={()=>removeTask(x.id)} aria-label={'Remove: '+x.t} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"><X size={14}/></button>
+    </li>);})}</ul>}
+ </Card>);
+}
+
+/* Student form, shown under the calendar: log homework, a daily task, or a habit. It maps into the Task List and onto the calendar. */
+function TaskForm({onAdd,today}){
+ const [title,setTitle]=useState('');
+ const [type,setType]=useState('homework');
+ const [due,setDue]=useState(today);
+ const [daily,setDaily]=useState(false);
+ const [core,setCore]=useState(false);
+ const [msg,setMsg]=useState('');
+ const [err,setErr]=useState('');
+ const clear=()=>{setMsg('');setErr('')};
+ const isDaily=daily||type==='habit';
+ const submit=(e)=>{
+  e.preventDefault();
+  if(!title.trim()){setErr('Enter a title, like "Math worksheet" or "Read for 10 minutes".');setMsg('');return}
+  if(!isDaily&&!due){setErr('Choose a due date so it can show on your calendar.');setMsg('');return}
+  onAdd({t:title.trim(),type,date:due||today,daily:isDaily,core});
+  setMsg(`Added "${title.trim()}" to your Task List`+(isDaily?' (repeats every day).':` and pinned it to ${fmtShort(due)} on the calendar.`));
+  setErr('');setTitle('');setCore(false);
+ };
+ const inp="w-full border border-slate-300 rounded-xl px-3 py-2 focus:border-brand bg-white";
+ return(<div className="lg:col-span-2"><Card title="Log New Homework, Task or Habit" icon={BookOpen}>
+  <form onSubmit={submit} noValidate className="space-y-4">
+   <div className="grid md:grid-cols-[1fr_200px_200px] gap-3">
+    <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Title</span>
+     <input value={title} onChange={e=>{setTitle(e.target.value);clear()}} placeholder="e.g., Math worksheet, page 42" aria-invalid={!!err&&!title.trim()} className={inp}/></label>
+    <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Type</span>
+     <select value={type} onChange={e=>{setType(e.target.value);clear()}} className={inp}>
+      <option value="homework">Homework Assignment</option><option value="task">Daily Task</option><option value="habit">Habit Entry</option></select></label>
+    <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">{isDaily?'Start Date':'Due Date'}</span>
+     <input type="date" value={due} onChange={e=>{setDue(e.target.value);clear()}} className={inp}/></label>
+   </div>
+   <div className="grid sm:grid-cols-2 gap-3">
+    <button type="button" role="switch" aria-checked={isDaily} disabled={type==='habit'} onClick={()=>{setDaily(!daily);clear()}} className="flex items-center gap-3 text-left disabled:opacity-70">
+     <span className={'w-12 h-7 rounded-full p-1 transition shrink-0 '+(isDaily?'bg-brand':'bg-slate-300')}><span className={'block w-5 h-5 bg-white rounded-full transition '+(isDaily?'translate-x-5':'')}/></span>
+     <span><span className="block font-semibold text-slate-800">Repeats every day</span><span className="block text-xs text-slate4">{type==='habit'?'Habits always repeat daily':'Resets each morning after you check it off'}</span></span></button>
+    <button type="button" role="switch" aria-checked={core} onClick={()=>{setCore(!core);clear()}} className="flex items-center gap-3 text-left">
+     <span className={'w-12 h-7 rounded-full p-1 transition shrink-0 '+(core?'bg-brand':'bg-slate-300')}><span className={'block w-5 h-5 bg-white rounded-full transition '+(core?'translate-x-5':'')}/></span>
+     <span><span className="block font-semibold text-slate-800">Part of a core goal</span><span className="block text-xs text-slate4">Marks it with a Core star</span></span></button>
+   </div>
+   <div className="flex flex-wrap items-center gap-3">
+    <button type="submit" className="flex items-center gap-1.5 bg-brand text-white font-semibold rounded-xl px-5 py-2.5 hover:bg-royal transition"><Plus size={16}/>Add to Task List</button>
+    <span aria-live="polite" className="text-sm">{err?<span role="alert" className="text-red-700">{err}</span>:<span className="text-green-700 font-medium">{msg}</span>}</span>
+   </div>
+  </form></Card></div>);
+}
+
+/* Student view: goal form, My Core Goals, Task List, the calendar with its schedule, and the task entry form under the calendar. No session logs, no weekly planner. */
+function Student({goals,toggleStep,addStep,removeStep,addGoal,tasks,addTask,toggleTask,removeTask,today}){
  return(<div className="grid lg:grid-cols-2 gap-5">
  <GoalForm onAdd={addGoal}/>
  <Card title="My Core Goals" icon={Target}>
@@ -279,7 +392,9 @@ function Student({goals,toggleStep,addStep,removeStep,addGoal,today}){
    ?<p className="text-sm text-slate4">No core goals yet. Create one on the left and break it into action steps.</p>
    :<div className="space-y-4">{goals.map(g=><GoalCard key={g.id} goal={g} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep}/>)}</div>}
  </Card>
- <CalendarSection goals={goals} today={today} sessions={[]}/></div>);
+ <div className="lg:col-span-2"><TaskList tasks={tasks} today={today} toggleTask={toggleTask} removeTask={removeTask}/></div>
+ <CalendarSection goals={goals} today={today} sessions={[]} tasks={tasks}/>
+ <TaskForm onAdd={addTask} today={today}/></div>);
 }
 
 function Parent({sessions,wins,goals,today}){
@@ -422,10 +537,11 @@ function App(){
  const [report,setReport]=useState(blank());
  const [sessions,setSessions]=useState(initSessions);
  const [wins,setWins]=useState([{t:'Turned in every assignment on time',d:'Oct 27'},{t:'Asked a teacher for help before the due date',d:'Oct 20'}]);
- /* Shared app memory: core goals live here so the student, parent, coach, and calendar views all read the same data. */
+ /* Shared app memory: core goals and tasks live here so the student, parent, coach, and calendar views all read the same data. */
  const [today,setToday]=useState(todayISO());
  useEffect(()=>{const id=setInterval(()=>setToday(todayISO()),60000);return()=>clearInterval(id)},[]);
  const [goals,setGoals]=useState(initGoals);
+ const [tasks,setTasks]=useState(initTasks);
  /* Goal action steps: progress is derived from these, so there is no manual progress value. */
  const toggleStep=(gid,sid)=>setGoals(gs=>gs.map(g=>g.id!==gid?g:{...g,steps:g.steps.map(s=>s.id===sid?{...s,done:!s.done}:s)}));
  const addStep=(gid,t)=>setGoals(gs=>gs.map(g=>g.id!==gid?g:{...g,steps:[...g.steps,{id:newId(),t,done:false}]}));
@@ -433,6 +549,14 @@ function App(){
  const addGoal=({title,due,steps})=>setGoals(g=>[...g,{id:newId(),g:title,due,steps:steps.map(t=>({id:newId(),t,done:false}))}]);
  /* Coach pipeline: pushes a goal flagged `assigned` into the same array the student, parent, and calendar read. */
  const assignGoal=({title,due,steps})=>setGoals(g=>[...g,{id:newId(),g:title,due,assigned:true,steps:steps.map(t=>({id:newId(),t,done:false}))}]);
+ /* Homework, daily tasks and habits. Daily items store completion per date, so they reset automatically each day. */
+ const addTask=({t,type,date,daily,core})=>setTasks(x=>[...x,{id:newId(),t,type,date,daily,core,done:false,doneDates:[]}]);
+ const toggleTask=(id)=>setTasks(xs=>xs.map(x=>{
+  if(x.id!==id)return x;
+  if(x.daily)return {...x,doneDates:x.doneDates.includes(today)?x.doneDates.filter(d=>d!==today):[...x.doneDates,today]};
+  return {...x,done:!x.done};
+ }));
+ const removeTask=(id)=>setTasks(xs=>xs.filter(x=>x.id!==id));
  const saveSession=()=>{
   const e={id:Date.now(),date:report.date,wins:report.wins.trim(),focus:report.focus.trim(),note:report.note.trim(),toParent:report.toParent,toStudent:report.toStudent};
   setSessions(x=>[e,...x].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id));
@@ -449,8 +573,8 @@ function App(){
    {!user&&<Login onLogin={setUser}/>}
    {user&&<>
     <h1 className="text-2xl font-extrabold text-slate-800 mb-1">{role==='student'?'Student Dashboard':role==='parent'?'Parent Portal':'Coach Dashboard'}</h1>
-    <p className="text-slate4 mb-6">{role==='student'?'Your goals, action steps, and calendar.':role==='parent'?'Progress, session updates, and wins.':'Log the session, assign goals, and choose what parents can see.'}</p>
-    {role==='student'&&<Student goals={goals} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep} addGoal={addGoal} today={today}/>}
+    <p className="text-slate4 mb-6">{role==='student'?'Your goals, homework, daily tasks, habits, and calendar.':role==='parent'?'Progress, session updates, and wins.':'Log the session, assign goals, and choose what parents can see.'}</p>
+    {role==='student'&&<Student goals={goals} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep} addGoal={addGoal} tasks={tasks} addTask={addTask} toggleTask={toggleTask} removeTask={removeTask} today={today}/>}
     {role==='parent'&&<Parent sessions={sessions.filter(x=>x.toParent)} wins={wins} goals={goals} today={today}/>}
     {role==='coach'&&<Coach report={report} setReport={setReport} saveSession={saveSession} sessions={sessions} goals={goals} assignGoal={assignGoal}/>}
    </>}
