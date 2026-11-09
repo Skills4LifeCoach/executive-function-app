@@ -335,8 +335,9 @@ function TaskList({tasks,today,toggleTask,removeTask}){
  </Card>);
 }
 
-/* Student form, shown under the calendar: log homework, a daily task, or a habit. It maps into the Task List and onto the calendar. */
-function TaskForm({onAdd,today}){
+/* Form to log homework, a daily task, or a habit. Used by the student (under the calendar) and by the coach (for the selected student).
+   heading and forName let the coach version say whose list the item is going to. */
+function TaskForm({onAdd,today,heading='Log New Homework, Task or Habit',forName=''}){
  const [title,setTitle]=useState('');
  const [type,setType]=useState('homework');
  const [due,setDue]=useState(today);
@@ -349,13 +350,14 @@ function TaskForm({onAdd,today}){
  const submit=(e)=>{
   e.preventDefault();
   if(!title.trim()){setErr('Enter a title, like "Math worksheet" or "Read for 10 minutes".');setMsg('');return}
-  if(!isDaily&&!due){setErr('Choose a due date so it can show on your calendar.');setMsg('');return}
+  if(!isDaily&&!due){setErr('Choose a due date so it can show on the calendar.');setMsg('');return}
   onAdd({t:title.trim(),type,date:due||today,daily:isDaily,core});
-  setMsg(`Added "${title.trim()}" to your Task List`+(isDaily?' (repeats every day).':` and pinned it to ${fmtShort(due)} on the calendar.`));
+  const whose=forName?forName+'’s':'your';
+  setMsg(`Added "${title.trim()}" to ${whose} Task List`+(isDaily?' (repeats every day).':` and pinned it to ${fmtShort(due)} on the calendar.`));
   setErr('');setTitle('');setCore(false);
  };
  const inp="w-full border border-slate-300 rounded-xl px-3 py-2 focus:border-brand bg-white";
- return(<div className="lg:col-span-2"><Card title="Log New Homework, Task or Habit" icon={BookOpen}>
+ return(<div className="lg:col-span-2"><Card title={heading} icon={BookOpen}>
   <form onSubmit={submit} noValidate className="space-y-4">
    <div className="grid md:grid-cols-[1fr_200px_200px] gap-3">
     <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Title</span>
@@ -369,7 +371,7 @@ function TaskForm({onAdd,today}){
    <div className="grid sm:grid-cols-2 gap-3">
     <button type="button" role="switch" aria-checked={isDaily} disabled={type==='habit'} onClick={()=>{setDaily(!daily);clear()}} className="flex items-center gap-3 text-left disabled:opacity-70">
      <span className={'w-12 h-7 rounded-full p-1 transition shrink-0 '+(isDaily?'bg-brand':'bg-slate-300')}><span className={'block w-5 h-5 bg-white rounded-full transition '+(isDaily?'translate-x-5':'')}/></span>
-     <span><span className="block font-semibold text-slate-800">Repeats every day</span><span className="block text-xs text-slate4">{type==='habit'?'Habits always repeat daily':'Resets each morning after you check it off'}</span></span></button>
+     <span><span className="block font-semibold text-slate-800">Repeats every day</span><span className="block text-xs text-slate4">{type==='habit'?'Habits always repeat daily':'Resets each morning after it is checked off'}</span></span></button>
     <button type="button" role="switch" aria-checked={core} onClick={()=>{setCore(!core);clear()}} className="flex items-center gap-3 text-left">
      <span className={'w-12 h-7 rounded-full p-1 transition shrink-0 '+(core?'bg-brand':'bg-slate-300')}><span className={'block w-5 h-5 bg-white rounded-full transition '+(core?'translate-x-5':'')}/></span>
      <span><span className="block font-semibold text-slate-800">Part of a core goal</span><span className="block text-xs text-slate4">Marks it with a Core star</span></span></button>
@@ -490,7 +492,44 @@ function GoalAssigner({onAssign,goals,studentName}){
  </Card>);
 }
 
-function Coach({report,setReport,saveSession,sessions,goals,assignGoal,studentName}){
+/* Coach view of the selected student's homework, daily tasks and habits. The coach can see what is done
+   (done status is the student's to change) and can remove items. New items are added with the form below it. */
+function CoachTaskList({tasks,today,studentName,removeTask}){
+ const [filter,setFilter]=useState('all');
+ const tabs=[['all','All'],['homework','Homework'],['task','Daily Tasks'],['habit','Habits']];
+ const overdue=(x)=>!x.daily&&!x.done&&x.date&&x.date<today;
+ const shown=tasks.filter(x=>filter==='all'||x.type===filter)
+  .slice().sort((a,b)=>(isDoneToday(a,today)-isDoneToday(b,today))||((a.date||'9999').localeCompare(b.date||'9999')));
+ const doneCount=tasks.filter(x=>isDoneToday(x,today)).length;
+ const overdueCount=tasks.filter(overdue).length;
+ return(<Card title={(studentName?studentName+'’s ':'Student ')+'Task List'} icon={ListChecks}
+  action={<span className="text-xs font-semibold text-slate4">{doneCount} of {tasks.length} done today{overdueCount>0&&<span className="text-red-600"> · {overdueCount} overdue</span>}</span>}>
+  <div role="tablist" aria-label="Filter student task list" className="flex flex-wrap gap-1.5 mb-4">{tabs.map(([k,l])=>(
+   <button key={k} type="button" role="tab" aria-selected={filter===k} onClick={()=>setFilter(k)} className={'px-3 py-1.5 rounded-full text-sm font-semibold transition '+(filter===k?'bg-brand text-white':'bg-slate-100 text-slate4 hover:text-slate-900')}>{l}</button>))}</div>
+  {shown.length===0
+   ?<p className="text-sm text-slate4 py-6 text-center">Nothing here yet. Use the form below to add homework, a daily task or a habit.</p>
+   :<ul className="space-y-1.5">{shown.map(x=>{
+    const done=isDoneToday(x,today);const M=kindMeta[x.type];const st=x.daily?streakOf(x,today):0;
+    return(<li key={x.id} className="flex items-center gap-1">
+     <div className={'flex-1 min-w-0 flex items-center gap-3 p-2.5 rounded-xl border '+(done?'bg-green-50 border-green-200':overdue(x)?'bg-red-50 border-red-200':'bg-white border-slate-200')}>
+      {done?<CheckCircle2 className="text-green-500 shrink-0" size={22} aria-label="Done"/>:<Circle className="text-slate-400 shrink-0" size={22} aria-label="Not done"/>}
+      <span className="min-w-0 flex-1">
+       <span className={'block font-semibold '+(done?'line-through text-slate-400':'text-slate-800')}>{x.t}</span>
+       <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate4 mt-0.5">
+        <span className="inline-flex items-center gap-1 font-semibold text-brand"><M.Ic size={12}/>{typeMeta[x.type].label}</span>
+        {x.daily?<span>Repeats daily</span>:(x.date&&<span>Due {fmtShort(x.date)}</span>)}
+        {overdue(x)&&<span className="font-semibold text-red-600">Overdue</span>}
+        {x.core&&<span className="inline-flex items-center gap-1 font-semibold text-royal"><Star size={12}/>Core</span>}
+        {x.daily&&st>0&&<span className="inline-flex items-center gap-1 font-semibold text-orange-600"><Flame size={12}/>{st}-day streak</span>}
+       </span>
+      </span>
+     </div>
+     <button type="button" onClick={()=>removeTask(x.id)} aria-label={'Remove: '+x.t} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"><X size={14}/></button>
+    </li>);})}</ul>}
+ </Card>);
+}
+
+function Coach({report,setReport,saveSession,sessions,goals,assignGoal,studentName,tasks,today,addTask,removeTask}){
  const [msg,setMsg]=useState('');
  const [err,setErr]=useState('');
  const [saving,setSaving]=useState(false);
@@ -530,7 +569,9 @@ function Coach({report,setReport,saveSession,sessions,goals,assignGoal,studentNa
    <span className="flex gap-1 flex-wrap justify-end">{(badge(x).length?badge(x):['Coach only']).map(b=><span key={b} className="text-xs font-semibold bg-brand/10 text-brand rounded-full px-2 py-0.5">{b}</span>)}</span></div>
    <p className="text-sm text-slate-700 mt-1">{x.wins.split('\n')[0]||x.focus}</p></div>))}</div>}
  </Card></div>
- <div className="lg:col-span-3"><GoalAssigner onAssign={assignGoal} goals={goals} studentName={studentName}/></div></div>);
+ <div className="lg:col-span-3"><GoalAssigner onAssign={assignGoal} goals={goals} studentName={studentName}/></div>
+ <div className="lg:col-span-3"><CoachTaskList tasks={tasks} today={today} studentName={studentName} removeTask={removeTask}/></div>
+ <div className="lg:col-span-3 grid lg:grid-cols-2 gap-5"><TaskForm onAdd={addTask} today={today} heading={'Add Homework, Task or Habit'+(studentName?' for '+studentName:'')} forName={studentName}/></div></div>);
 }
 
 /* Coaches (and parents with more than one child) choose which student they are looking at. The database only ever returns students they are allowed to see. */
@@ -649,7 +690,8 @@ function App(){
  const addGoal=(x)=>saveGoal(x,true);
  const assignGoal=(x)=>saveGoal(x,false);
 
- /* Homework, daily tasks and habits. Daily items store completion per date, so they reset automatically each day. */
+ /* Homework, daily tasks and habits. Daily items store completion per date, so they reset automatically each day.
+    The same addTask and removeTask are used by the student and by the coach (for the selected student). */
  const addTask=({t,type,date,daily,core})=>{
   const id=newId();
   setTasks(x=>[...x,{id,t,type,date,daily,core,done:false,doneDates:[]}]);
@@ -700,7 +742,7 @@ function App(){
    {!booting&&!user&&<Login onLogin={handleLogin}/>}
    {!booting&&user&&<>
     <h1 className="text-2xl font-extrabold text-slate-800 mb-1">{role==='student'?'Student Dashboard':role==='parent'?'Parent Portal':'Coach Dashboard'}</h1>
-    <p className="text-slate4 mb-6">{role==='student'?'Your goals, homework, daily tasks, habits, and calendar.':role==='parent'?'Progress, session updates, and wins.':'Log the session, assign goals, and choose what parents can see.'}</p>
+    <p className="text-slate4 mb-6">{role==='student'?'Your goals, homework, daily tasks, habits, and calendar.':role==='parent'?'Progress, session updates, and wins.':'Log the session, assign goals and tasks, and choose what parents can see.'}</p>
     {dbError&&<div role="alert" className="no-print flex gap-2 items-start bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm mb-5"><AlertCircle size={18} className="shrink-0 mt-0.5"/><p className="flex-1">{dbError}</p>
      <button type="button" onClick={()=>setDbError('')} aria-label="Dismiss message" className="p-0.5 rounded hover:bg-red-100"><X size={14}/></button></div>}
     {role!=='student'&&<StudentPicker students={students} activeId={activeId} setActiveId={setActiveId} label={role==='parent'?'Child:':'Student:'}/>}
@@ -711,7 +753,7 @@ function App(){
       :<>
        {role==='student'&&<Student goals={goals} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep} addGoal={addGoal} tasks={tasks} addTask={addTask} toggleTask={toggleTask} removeTask={removeTask} today={today}/>}
        {role==='parent'&&<Parent sessions={sessions.filter(x=>x.toParent)} wins={wins} goals={goals} today={today}/>}
-       {role==='coach'&&<Coach report={report} setReport={setReport} saveSession={saveSession} sessions={sessions} goals={goals} assignGoal={assignGoal} studentName={activeStudent?activeStudent.full_name:''}/>}
+       {role==='coach'&&<Coach report={report} setReport={setReport} saveSession={saveSession} sessions={sessions} goals={goals} assignGoal={assignGoal} studentName={activeStudent?activeStudent.full_name:''} tasks={tasks} today={today} addTask={addTask} removeTask={removeTask}/>}
       </>}
    </>}
   </main>
