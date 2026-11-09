@@ -62,7 +62,10 @@ async function resolveUser(authUser){
 
 /* Database rows -> the shapes the screens already use. */
 const mapGoal=(r)=>({id:r.id,g:r.title,due:r.due_date||'',assigned:!r.is_personal,
- steps:(r.goal_steps||[]).slice().sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at))).map(s=>({id:s.id,t:s.title,done:s.done}))});
+ steps:(r.goal_steps||[]).slice()
+  /* Order by saved position first; steps without one fall back to creation time, then ID, so every person sees the same order. */
+  .sort((a,b)=>((a.position==null?1e9:a.position)-(b.position==null?1e9:b.position))||String(a.created_at).localeCompare(String(b.created_at))||String(a.id).localeCompare(String(b.id)))
+  .map(s=>({id:s.id,t:s.title,done:s.done,pos:s.position==null?null:s.position}))});
 const mapTask=(r)=>({id:r.id,t:r.title,type:r.type,date:r.due_date||'',daily:r.is_daily,core:r.is_core_goal,done:r.done,doneDates:r.done_dates||[]});
 const mapLog=(r)=>({id:r.id,date:r.session_date,wins:r.wins||'',focus:r.next_focus||'',note:r.parent_note||'',toParent:r.show_to_parent,toStudent:r.show_to_student});
 
@@ -863,8 +866,10 @@ function App(){
  };
  const addStep=(gid,t)=>{
   const id=newId();
-  setGoals(gs=>gs.map(g=>g.id!==gid?g:{...g,steps:[...g.steps,{id,t,done:false}]}));
-  sb.from('goal_steps').insert({id,goal_id:gid,student_id:activeId,title:t,done:false}).then(check);
+  const goal=goals.find(g=>g.id===gid);
+  const pos=goal?goal.steps.reduce((m,x)=>Math.max(m,x.pos==null?-1:x.pos),-1)+1:0;
+  setGoals(gs=>gs.map(g=>g.id!==gid?g:{...g,steps:[...g.steps,{id,t,done:false,pos}]}));
+  sb.from('goal_steps').insert({id,goal_id:gid,student_id:activeId,title:t,done:false,position:pos}).then(check);
  };
  const removeStep=(gid,sid)=>{
   setGoals(gs=>gs.map(g=>g.id!==gid?g:{...g,steps:g.steps.filter(s=>s.id!==sid)}));
@@ -873,11 +878,11 @@ function App(){
  /* A student's own goal (is_personal) or a coach-assigned goal. Both live in the same table the student, parent, and calendar read. */
  const saveGoal=async({title,due,steps},personal)=>{
   const gid=newId();
-  const stepRows=steps.map(t=>({id:newId(),t,done:false}));
+  const stepRows=steps.map((t,i)=>({id:newId(),t,done:false,pos:i}));
   setGoals(g=>[...g,{id:gid,g:title,due,assigned:!personal,steps:stepRows}]);
   let r=await sb.from('goals').insert({id:gid,student_id:activeId,title,due_date:due||null,is_personal:personal});
   if(!r.error&&stepRows.length){
-   r=await sb.from('goal_steps').insert(stepRows.map(s=>({id:s.id,goal_id:gid,student_id:activeId,title:s.t,done:false})));
+   r=await sb.from('goal_steps').insert(stepRows.map(s=>({id:s.id,goal_id:gid,student_id:activeId,title:s.t,done:false,position:s.pos})));
   }
   if(r.error)failed(r.error);
  };
