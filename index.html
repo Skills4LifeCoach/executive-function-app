@@ -581,12 +581,13 @@ function WeeklySummary({tasks,today}){
  </Card>);
 }
 
-function Parent({sessions,wins,goals,tasks,today}){
+function Parent({sessions,wins,goals,tasks,today,childName}){
  const latest=sessions[0];
  const dl=()=>{const txt=`SKILLS 4LIFE COACHING - PARENT REPORT\n=====================================\nSession date: ${fmtShort(latest.date)}\n\nWins this session:\n${latest.wins}\n\nFocus for next time:\n${latest.focus}\n\nNotes for parents:\n${latest.note||'None'}\n`;
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='parent-report.txt';a.click()};
  return(<div className="grid lg:grid-cols-2 gap-5">
  <div className="lg:col-span-2"><WeeklySummary tasks={tasks} today={today}/></div>
+ <div className="lg:col-span-2"><CoachTaskList tasks={tasks} today={today} studentName={childName} readOnly/></div>
  <Card title="Latest Session Update" icon={Users} action={latest&&<div className="no-print flex gap-2">
    <button onClick={()=>window.print()} className="flex items-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-xl px-3 py-1.5 hover:bg-royal transition"><Printer size={15}/>Print / Save as PDF</button>
    <button onClick={dl} className="flex items-center gap-1.5 bg-slate-100 text-brand text-sm font-semibold rounded-xl px-3 py-1.5 hover:bg-brand/10 transition"><Download size={15}/>Download .txt</button></div>}>
@@ -606,7 +607,11 @@ function Parent({sessions,wins,goals,tasks,today}){
    <div className="flex justify-between items-center gap-3 text-sm mb-1"><span className="font-medium text-slate-700">{g.g}</span>
     {s.achieved?<span className="pop inline-flex items-center gap-1 bg-green-500 text-white text-xs font-bold rounded-full px-2.5 py-1 shrink-0"><Trophy size={12}/>Goal Achieved! 🎉</span>:<span className="font-bold text-brand shrink-0">{s.pct}%</span>}</div>
    <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={s.pct} aria-label={'Progress for '+g.g}><div className={'h-full rounded-full transition-all '+(s.achieved?'bg-green-500':'bg-brand')} style={{width:s.pct+'%'}}/></div>
-   <p className="text-xs text-slate4 mt-1">{s.total===0?'No action steps yet.':`${s.done} of ${s.total} action steps done`}</p></div>);})}</div>}
+   <p className="text-xs text-slate4 mt-1">{s.total===0?'No action steps yet.':`${s.done} of ${s.total} action steps done`}</p>
+   {g.steps.length>0&&<ul className="mt-2 space-y-1">{g.steps.map((st,i)=>(<li key={st.id} className={'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm '+(st.done?'bg-green-50':'bg-slate-50')}>
+    <span aria-hidden="true" className={'font-bold w-4 text-center shrink-0 '+(st.done?'text-green-600':'text-slate-400')}>{st.done?'✓':'○'}</span>
+    <span className={st.done?'line-through text-slate-400':'text-slate-800'}><span className="font-semibold text-slate4 mr-1">{i+1}.</span>{st.t}</span>
+    <span className="sr-only">{st.done?'(done)':'(not done)'}</span></li>))}</ul>}</div>);})}</div>}
  </Card>
  <Card title="Session Log" icon={ClipboardList}>
   {sessions.length===0?<p className="text-sm text-slate4">No session logs shared yet.</p>
@@ -683,7 +688,7 @@ function GoalAssigner({onAssign,goals,studentName}){
 
 /* Coach view of the selected student's homework, daily tasks and habits. The coach can see what is done
    (done status is the student's to change) and can remove items. New items are added with the form below it. */
-function CoachTaskList({tasks,today,studentName,removeTask}){
+function CoachTaskList({tasks,today,studentName,removeTask,readOnly=false}){
  const [filter,setFilter]=useState('all');
  const tabs=[['all','All'],['homework','Homework'],['task','Daily Tasks'],['habit','Habits']];
  const overdue=(x)=>!x.daily&&!x.done&&x.date&&x.date<today;
@@ -696,7 +701,7 @@ function CoachTaskList({tasks,today,studentName,removeTask}){
   <div role="tablist" aria-label="Filter student task list" className="flex flex-wrap gap-1.5 mb-4">{tabs.map(([k,l])=>(
    <button key={k} type="button" role="tab" aria-selected={filter===k} onClick={()=>setFilter(k)} className={'px-3 py-1.5 rounded-full text-sm font-semibold transition '+(filter===k?'bg-brand text-white':'bg-slate-100 text-slate4 hover:text-slate-900')}>{l}</button>))}</div>
   {shown.length===0
-   ?<p className="text-sm text-slate4 py-6 text-center">Nothing here yet. Use the form below to add homework, a daily task or a habit.</p>
+   ?<p className="text-sm text-slate4 py-6 text-center">{readOnly?'No homework, tasks or habits have been added yet.':'Nothing here yet. Use the form below to add homework, a daily task or a habit.'}</p>
    :<ul className="space-y-1.5">{shown.map(x=>{
     const done=isDoneToday(x,today);const M=kindMeta[x.type];const st=x.daily?streakOf(x,today):0;
     return(<li key={x.id} className="flex items-center gap-1">
@@ -713,7 +718,7 @@ function CoachTaskList({tasks,today,studentName,removeTask}){
        </span>
       </span>
      </div>
-     <button type="button" onClick={()=>removeTask(x.id)} aria-label={'Remove: '+x.t} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"><X size={14}/></button>
+     {!readOnly&&<button type="button" onClick={()=>removeTask(x.id)} aria-label={'Remove: '+x.t} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"><X size={14}/></button>}
     </li>);})}</ul>}
  </Card>);
 }
@@ -952,7 +957,7 @@ function App(){
       ?<p className="text-center text-slate4 mt-10" aria-live="polite">Loading…</p>
       :<>
        {role==='student'&&<Student goals={goals} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep} addGoal={addGoal} tasks={tasks} addTask={addTask} toggleTask={toggleTask} removeTask={removeTask} today={today}/>}
-       {role==='parent'&&<Parent sessions={sessions.filter(x=>x.toParent)} wins={wins} goals={goals} tasks={tasks} today={today}/>}
+       {role==='parent'&&<Parent sessions={sessions.filter(x=>x.toParent)} wins={wins} goals={goals} tasks={tasks} today={today} childName={activeStudent?activeStudent.full_name:''}/>}
        {role==='coach'&&<Coach report={report} setReport={setReport} saveSession={saveSession} sessions={sessions} goals={goals} assignGoal={assignGoal} studentName={activeStudent?activeStudent.full_name:''} tasks={tasks} today={today} addTask={addTask} removeTask={removeTask}/>}
       </>}
    </>}
