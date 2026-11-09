@@ -397,11 +397,112 @@ function Student({goals,toggleStep,addStep,removeStep,addGoal,tasks,addTask,togg
  <TaskForm onAdd={addTask} today={today}/></div>);
 }
 
-function Parent({sessions,wins,goals,today}){
+/* ---------- Weekly summary for parents: completion and streaks over a 7-day window ---------- */
+const lastNDays=(end,n)=>Array.from({length:n},(_,i)=>{const d=parseISO(end);d.setDate(d.getDate()-(n-1-i));return dateToISO(d)});
+/* Longest run of consecutive completed days, ever, for a daily task or habit. */
+const bestStreak=(x)=>{
+ const ds=[...new Set(x.doneDates)].sort();let best=0,run=0,prev=null;
+ for(const d of ds){
+  if(prev){const n=parseISO(prev);n.setDate(n.getDate()+1);run=dateToISO(n)===d?run+1:1}else run=1;
+  best=Math.max(best,run);prev=d;
+ }
+ return best;
+};
+
+function WeeklySummary({tasks,today}){
+ const [offset,setOffset]=useState(0);
+ const endD=parseISO(today);endD.setDate(endD.getDate()-7*offset);
+ const end=dateToISO(endD);
+ const days=lastNDays(end,7);
+ const start=days[0];
+ const recurring=tasks.filter(x=>x.daily);
+ /* One day's state for a daily task or habit. Today (or later) that is not checked yet is "pending", so it never counts against the student. */
+ const cell=(x,d)=>{
+  if(x.doneDates.includes(d))return 'done';
+  if(x.date&&d<x.date)return 'na';
+  if(d>=today)return 'pending';
+  return 'missed';
+ };
+ const rows=recurring.map(x=>{
+  const cs=days.map(d=>cell(x,d));
+  const done=cs.filter(c=>c==='done').length;
+  const exp=done+cs.filter(c=>c==='missed').length;
+  return {x,cs,done,exp,streak:streakOf(x,end),best:bestStreak(x)};
+ }).filter(r=>r.cs.some(c=>c!=='na'));
+ /* Homework and one-time tasks count in the week they are due. Upcoming items (not yet due) are listed but not counted. */
+ const oneTime=tasks.filter(x=>!x.daily&&x.date&&x.date>=start&&x.date<=end)
+  .slice().sort((a,b)=>a.date.localeCompare(b.date));
+ const status=(x)=>x.done?'done':(x.date<today?'overdue':'upcoming');
+ const rDone=rows.reduce((n,r)=>n+r.done,0),rExp=rows.reduce((n,r)=>n+r.exp,0);
+ const oDone=oneTime.filter(x=>status(x)==='done').length;
+ const oDue=oneTime.filter(x=>status(x)!=='upcoming').length;
+ const totalDone=rDone+oDone,totalExp=rExp+oDue;
+ const pct=totalExp?Math.round((totalDone/totalExp)*100):null;
+ const topStreak=rows.reduce((m,r)=>Math.max(m,r.streak),0);
+ const rangeLabel=`${fmtShort(start)} to ${fmtShort(end)}`;
+ const note=pct===null?'Nothing was scheduled for this week yet.'
+  :pct>=80?'A strong week. Consistency like this is what builds executive function skills.'
+  :pct>=50?'Solid progress this week. A little more consistency will keep momentum building.'
+  :'A lighter week. Small, steady steps are the goal, so ask your coach about what to focus on next.';
+ const tile=(label,value,sub)=>(<div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+  <p className="text-2xl font-extrabold text-royal">{value}</p><p className="text-xs font-semibold text-slate-700">{label}</p>{sub&&<p className="text-xs text-slate4 mt-0.5">{sub}</p>}</div>);
+ const mark=(c)=>c==='done'?<CheckCircle2 className="text-green-500" size={24} aria-label="Done"/>
+  :c==='missed'?<Circle className="text-red-300" size={24} aria-label="Missed"/>
+  :c==='pending'?<Circle className="text-slate-300" size={24} aria-label="Not yet"/>
+  :<span className="text-slate-300 text-lg leading-none" aria-label="Not started">–</span>;
+ const cols={gridTemplateColumns:'minmax(8rem,1fr) repeat(7,2.25rem) 3.5rem'};
+ return(<Card title="Weekly Summary" icon={Flame} action={<div className="no-print flex gap-1 items-center">
+   <button type="button" onClick={()=>setOffset(offset+1)} aria-label="Previous week" className="w-9 h-9 rounded-lg bg-slate-100 text-brand text-xl font-bold leading-none hover:bg-brand/10">&lsaquo;</button>
+   <button type="button" onClick={()=>setOffset(0)} disabled={offset===0} className="h-9 px-3 rounded-lg bg-slate-100 text-brand text-sm font-semibold hover:bg-brand/10 disabled:opacity-50">This week</button>
+   <button type="button" onClick={()=>setOffset(Math.max(0,offset-1))} disabled={offset===0} aria-label="Next week" className="w-9 h-9 rounded-lg bg-slate-100 text-brand text-xl font-bold leading-none hover:bg-brand/10 disabled:opacity-50">&rsaquo;</button></div>}>
+  <p className="font-bold text-royal mb-3">{rangeLabel}{offset===0&&<span className="ml-2 text-xs font-semibold text-slate4">Last 7 days</span>}</p>
+  {tasks.length===0
+   ?<p className="text-sm text-slate4">No homework, tasks or habits have been added yet. Once your student starts using their Task List, the weekly summary will appear here.</p>
+   :<div className="space-y-5">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+     {tile('Completion',pct===null?'–':pct+'%',totalExp?`${totalDone} of ${totalExp} done`:'')}
+     {tile('Daily check-ins',rExp?`${rDone}/${rExp}`:'–','Daily tasks & habits')}
+     {tile('Homework & tasks',oDue?`${oDone}/${oDue}`:'–','Due this week')}
+     {tile('Current streak',topStreak>0?topStreak+(topStreak===1?' day':' days'):'–','Longest running habit')}
+    </div>
+    <p className="text-sm text-slate-700 bg-brand/5 rounded-xl p-3">{note}</p>
+    {rows.length>0&&<div>
+     <h4 className="font-bold text-slate-800 mb-2">Daily tasks &amp; habits</h4>
+     <div className="overflow-x-auto"><div className="min-w-[540px]">
+      <div className="grid gap-1 items-center text-xs text-slate4 mb-1" style={cols}>
+       <span/>{days.map(d=><span key={d} className={'text-center font-semibold '+(d===today?'text-royal':'')}>{parseISO(d).toLocaleDateString('en-US',{weekday:'short'})}</span>)}<span className="text-center font-semibold">Total</span></div>
+      <ul className="space-y-1">{rows.map(r=>{const M=kindMeta[r.x.type];return(
+       <li key={r.x.id} className="grid gap-1 items-center p-1.5 rounded-xl border border-slate-200 bg-white" style={cols}>
+        <span className="min-w-0"><span className="block font-semibold text-slate-800 truncate">{r.x.t}</span>
+         <span className="flex flex-wrap items-center gap-x-2 text-xs text-slate4"><span className="inline-flex items-center gap-1 font-semibold text-brand"><M.Ic size={11}/>{typeMeta[r.x.type].label}</span>
+          {r.streak>0&&<span className="inline-flex items-center gap-1 font-semibold text-orange-600"><Flame size={11}/>{r.streak}-day streak</span>}
+          {r.best>1&&<span>Best: {r.best}</span>}</span></span>
+        {r.cs.map((c,i)=><span key={i} className="flex justify-center">{mark(c)}</span>)}
+        <span className="text-center text-sm font-bold text-slate-700">{r.done}/{r.exp}</span>
+       </li>);})}</ul>
+     </div></div>
+     <p className="text-xs text-slate4 mt-2">Green means done. Pink means missed. Gray means not checked yet. A dash means the item had not started yet.</p>
+    </div>}
+    {oneTime.length>0&&<div>
+     <h4 className="font-bold text-slate-800 mb-2">Homework &amp; tasks due this week</h4>
+     <ul className="space-y-1.5">{oneTime.map(x=>{const st=status(x);const M=kindMeta[x.type];return(
+      <li key={x.id} className={'flex items-center gap-3 p-2.5 rounded-xl border '+(st==='done'?'bg-green-50 border-green-200':st==='overdue'?'bg-red-50 border-red-200':'bg-white border-slate-200')}>
+       {st==='done'?<CheckCircle2 className="text-green-500 shrink-0" size={22}/>:<Circle className={(st==='overdue'?'text-red-300':'text-slate-300')+' shrink-0'} size={22}/>}
+       <span className="min-w-0 flex-1"><span className={'block font-semibold '+(st==='done'?'line-through text-slate-400':'text-slate-800')}>{x.t}</span>
+        <span className="flex flex-wrap items-center gap-x-2 text-xs text-slate4"><span className="inline-flex items-center gap-1 font-semibold text-brand"><M.Ic size={11}/>{typeMeta[x.type].label}</span><span>Due {fmtShort(x.date)}</span></span></span>
+       <span className={'text-xs font-bold shrink-0 '+(st==='done'?'text-green-700':st==='overdue'?'text-red-600':'text-slate4')}>{st==='done'?'Done':st==='overdue'?'Not done':'Upcoming'}</span>
+      </li>);})}</ul>
+    </div>}
+   </div>}
+ </Card>);
+}
+
+function Parent({sessions,wins,goals,tasks,today}){
  const latest=sessions[0];
  const dl=()=>{const txt=`SKILLS 4LIFE COACHING - PARENT REPORT\n=====================================\nSession date: ${fmtShort(latest.date)}\n\nWins this session:\n${latest.wins}\n\nFocus for next time:\n${latest.focus}\n\nNotes for parents:\n${latest.note||'None'}\n`;
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='parent-report.txt';a.click()};
  return(<div className="grid lg:grid-cols-2 gap-5">
+ <div className="lg:col-span-2"><WeeklySummary tasks={tasks} today={today}/></div>
  <Card title="Latest Session Update" icon={Users} action={latest&&<div className="no-print flex gap-2">
    <button onClick={()=>window.print()} className="flex items-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-xl px-3 py-1.5 hover:bg-royal transition"><Printer size={15}/>Print / Save as PDF</button>
    <button onClick={dl} className="flex items-center gap-1.5 bg-slate-100 text-brand text-sm font-semibold rounded-xl px-3 py-1.5 hover:bg-brand/10 transition"><Download size={15}/>Download .txt</button></div>}>
@@ -742,7 +843,7 @@ function App(){
    {!booting&&!user&&<Login onLogin={handleLogin}/>}
    {!booting&&user&&<>
     <h1 className="text-2xl font-extrabold text-slate-800 mb-1">{role==='student'?'Student Dashboard':role==='parent'?'Parent Portal':'Coach Dashboard'}</h1>
-    <p className="text-slate4 mb-6">{role==='student'?'Your goals, homework, daily tasks, habits, and calendar.':role==='parent'?'Progress, session updates, and wins.':'Log the session, assign goals and tasks, and choose what parents can see.'}</p>
+    <p className="text-slate4 mb-6">{role==='student'?'Your goals, homework, daily tasks, habits, and calendar.':role==='parent'?'Weekly summary, progress, session updates, and wins.':'Log the session, assign goals and tasks, and choose what parents can see.'}</p>
     {dbError&&<div role="alert" className="no-print flex gap-2 items-start bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm mb-5"><AlertCircle size={18} className="shrink-0 mt-0.5"/><p className="flex-1">{dbError}</p>
      <button type="button" onClick={()=>setDbError('')} aria-label="Dismiss message" className="p-0.5 rounded hover:bg-red-100"><X size={14}/></button></div>}
     {role!=='student'&&<StudentPicker students={students} activeId={activeId} setActiveId={setActiveId} label={role==='parent'?'Child:':'Student:'}/>}
@@ -752,7 +853,7 @@ function App(){
       ?<p className="text-center text-slate4 mt-10" aria-live="polite">Loading…</p>
       :<>
        {role==='student'&&<Student goals={goals} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep} addGoal={addGoal} tasks={tasks} addTask={addTask} toggleTask={toggleTask} removeTask={removeTask} today={today}/>}
-       {role==='parent'&&<Parent sessions={sessions.filter(x=>x.toParent)} wins={wins} goals={goals} today={today}/>}
+       {role==='parent'&&<Parent sessions={sessions.filter(x=>x.toParent)} wins={wins} goals={goals} tasks={tasks} today={today}/>}
        {role==='coach'&&<Coach report={report} setReport={setReport} saveSession={saveSession} sessions={sessions} goals={goals} assignGoal={assignGoal} studentName={activeStudent?activeStudent.full_name:''} tasks={tasks} today={today} addTask={addTask} removeTask={removeTask}/>}
       </>}
    </>}
