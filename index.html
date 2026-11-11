@@ -67,7 +67,7 @@ const mapGoal=(r)=>({id:r.id,g:r.title,due:r.due_date||'',assigned:!r.is_persona
   .sort((a,b)=>((a.position==null?1e9:a.position)-(b.position==null?1e9:b.position))||String(a.created_at).localeCompare(String(b.created_at))||String(a.id).localeCompare(String(b.id)))
   .map(s=>({id:s.id,t:s.title,done:s.done,pos:s.position==null?null:s.position}))});
 const mapTask=(r)=>({id:r.id,t:r.title,type:r.type,date:r.due_date||'',daily:r.is_daily,core:r.is_core_goal,done:r.done,doneDates:r.done_dates||[]});
-const mapLog=(r)=>({id:r.id,date:r.session_date,wins:r.wins||'',focus:r.next_focus||'',note:r.parent_note||'',toParent:r.show_to_parent,toStudent:r.show_to_student});
+const mapLog=(r)=>({id:r.id,date:r.session_date,wins:r.wins||'',focus:r.next_focus||'',note:r.parent_note||'',toParent:r.show_to_parent,toStudent:r.show_to_student,emailed:!!r.parent_emailed_at});
 
 const Logo=({size=48})=>(
 <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label="Skills 4Life Coaching logo">
@@ -735,12 +735,12 @@ function Coach({report,setReport,saveSession,sessions,goals,assignGoal,studentNa
   if(!report.wins.trim()&&!report.focus.trim()){setErr('Add a win or a focus before saving.');return}
   const who=[report.toParent&&'parent',report.toStudent&&'student'].filter(Boolean).join(' and ');
   setSaving(true);
-  const ok=await saveSession();
+  const res=await saveSession();
   setSaving(false);
-  if(ok){setMsg('Session log saved. Visible to: '+(who||'coach only')+'.');setErr('')}
+  if(res.ok){setMsg('Session log saved. Visible to: '+(who||'coach only')+'.'+(res.email?' '+res.email:''));setErr('')}
   else{setErr('The session log could not be saved. Please try again.');setMsg('')}
  };
- const badge=(x)=>[x.toParent&&'Parent',x.toStudent&&'Student'].filter(Boolean);
+ const badge=(x)=>[x.toParent&&'Parent',x.toStudent&&'Student',x.emailed&&'Emailed'].filter(Boolean);
  return(<div className="grid lg:grid-cols-3 gap-5">
  <div className="lg:col-span-2"><Card title="Session Notes" icon={ClipboardList}><div className="space-y-4">
   <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Session date</span><input type="date" value={report.date} onChange={e=>set('date',e.target.value)} className="border border-slate-300 rounded-xl px-3 py-2"/></label>
@@ -755,6 +755,7 @@ function Coach({report,setReport,saveSession,sessions,goals,assignGoal,studentNa
   <div className="space-y-4">
    <Switch on={report.toParent} toggle={()=>set('toParent',!report.toParent)} label={report.toParent?'Shown to parent':'Hidden from parent'} hint="Latest update, session log, wins tracker, printable report"/>
    <Switch on={report.toStudent} toggle={()=>set('toStudent',!report.toStudent)} label={report.toStudent?'Shown to student':'Hidden from student'} hint="Kept on record; the student dashboard no longer displays session logs"/>
+   <Switch on={report.emailParent&&report.toParent} toggle={()=>set('emailParent',!report.emailParent)} label={report.emailParent&&report.toParent?'Email parent(s) on save':'No email on save'} hint={report.toParent?'Sends the wins, focus and your note to each linked parent':'Turn on "Shown to parent" to send an email'}/>
   </div>
  </Card>
  <Card title="Saved Logs" icon={ClipboardList}>
@@ -790,7 +791,7 @@ function App(){
  const students=user?user.students:[];
  const activeStudent=students.find(s=>s.id===activeId)||null;
  /* The coach's draft; saving turns it into a saved session log, with its own parent/student visibility. */
- const blank=()=>({date:todayISO(),wins:'',focus:'',note:'',toParent:true,toStudent:true});
+ const blank=()=>({date:todayISO(),wins:'',focus:'',note:'',toParent:true,toStudent:true,emailParent:true});
  const [report,setReport]=useState(blank());
  const [sessions,setSessions]=useState([]);
  const [goals,setGoals]=useState([]);
@@ -920,13 +921,27 @@ function App(){
 
  /* Saves the coach's session log to the selected student. Returns true or false so the form can show the right message. */
  const saveSession=async()=>{
-  if(!activeId)return false;
-  const e={id:newId(),date:report.date,wins:report.wins.trim(),focus:report.focus.trim(),note:report.note.trim(),toParent:report.toParent,toStudent:report.toStudent};
+  if(!activeId)return {ok:false};
+  const e={id:newId(),date:report.date,wins:report.wins.trim(),focus:report.focus.trim(),note:report.note.trim(),toParent:report.toParent,toStudent:report.toStudent,emailed:false};
   const {error}=await sb.from('session_logs').insert({id:e.id,student_id:activeId,session_date:e.date,wins:e.wins,next_focus:e.focus,parent_note:e.note,show_to_parent:e.toParent,show_to_student:e.toStudent});
-  if(error){console.error(error);return false}
+  if(error){console.error(error);return {ok:false}}
   setSessions(x=>[e,...x].sort((a,b)=>b.date.localeCompare(a.date)));
-  setReport({...blank(),date:report.date,toParent:report.toParent,toStudent:report.toStudent});
-  return true;
+  const wantEmail=report.toParent&&report.emailParent;
+  setReport({...blank(),date:report.date,toParent:report.toParent,toStudent:report.toStudent,emailParent:report.emailParent});
+  /* The session log is already saved. Now ask the notify-parents function to email the linked parents. A failure here never loses the log. */
+  let email='';
+  if(wantEmail){
+   try{
+    const {data,error:fe}=await sb.functions.invoke('notify-parents',{body:{session_log_id:e.id}});
+    if(fe)throw fe;
+    if(data&&data.sent>0){
+     email=`Email sent to ${data.sent} parent${data.sent===1?'':'s'}.`+(data.failed?` ${data.failed} could not be sent.`:'');
+     setSessions(xs=>xs.map(x=>x.id===e.id?{...x,emailed:true}:x));
+    }else if(data&&data.reason==='no_parents')email='No parent is linked to this student, so no email was sent.';
+    else email='No email was sent.';
+   }catch(ex){console.error(ex);email='The log was saved, but the parent email could not be sent.'}
+  }
+  return {ok:true,email};
  };
 
  /* The parent's Wins Tracker is built from the wins in the session logs the coach shared with the parent. */
