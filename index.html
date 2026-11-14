@@ -1133,7 +1133,7 @@ function App(){
   const [g,t,s]=await Promise.all([
    sb.from('goals').select('*, goal_steps(*)').eq('student_id',sid).order('created_at'),
    sb.from('tasks').select('*').eq('student_id',sid).order('created_at'),
-   sb.from('session_logs').select('*').eq('student_id',sid).order('session_date',{ascending:false}).order('created_at',{ascending:false})
+   role==='student'?sb.rpc('student_session_logs',{sid}):sb.from('session_logs').select('*').eq('student_id',sid).order('session_date',{ascending:false}).order('created_at',{ascending:false})
   ]);
   if(!stillCurrent())return;
   if(g.error||t.error||s.error){console.error(g.error||t.error||s.error);setDbError('We could not load the latest information. Please refresh the page or try again in a moment.');return}
