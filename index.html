@@ -470,7 +470,7 @@ function TaskList({tasks,today,toggleTask,removeTask}){
   <div role="tablist" aria-label="Filter task list" className="flex flex-wrap gap-1.5 mb-4">{tabs.map(([k,l])=>(
    <button key={k} type="button" role="tab" aria-selected={filter===k} onClick={()=>setFilter(k)} className={'px-3 py-1.5 rounded-full text-sm font-semibold transition '+(filter===k?'bg-brand text-white':'bg-slate-100 text-slate4 hover:text-slate-900')}>{l}</button>))}</div>
   {shown.length===0
-   ?<p className="text-sm text-slate4 py-6 text-center">Nothing here yet. Use the form under the calendar to log an assignment, task or habit.</p>
+   ?<p className="text-sm text-slate4 py-6 text-center">Nothing here yet. Use the form further down the page to log an assignment, task or habit.</p>
    :<ul className="space-y-1.5">{shown.map(x=>{
     const done=isDoneToday(x,today);const M=kindMeta[x.type];const st=x.daily?streakOf(x,today):0;
     return(<li key={x.id} className="flex items-center gap-1">
@@ -695,19 +695,24 @@ function SessionHistory({sessions,who}){
  </Card>);
 }
 
-/* Student view: goal form, My Core Goals, Task List, Past Session Logs, the calendar, and the task entry form. */
+/* Student page order: 1. Task list  2. Calendar and schedule  3. Goals  4. Log homework/task/habit  5. Past session logs */
 function Student({goals,toggleStep,addStep,removeStep,addGoal,tasks,addTask,toggleTask,removeTask,today,sessions}){
  return(<div className="grid lg:grid-cols-2 gap-5">
+ {/* 1. Task list */}
+ <div className="lg:col-span-2"><TaskList tasks={tasks} today={today} toggleTask={toggleTask} removeTask={removeTask}/></div>
+ {/* 2. Calendar and schedule */}
+ <CalendarSection goals={goals} today={today} sessions={sessions} tasks={tasks}/>
+ {/* 3. Goals */}
  <GoalForm onAdd={addGoal}/>
  <Card title="My Core Goals" icon={Target}>
   {goals.length===0
    ?<p className="text-sm text-slate4">No core goals yet. Create one on the left and break it into action steps.</p>
    :<div className="space-y-4">{goals.map(g=><GoalCard key={g.id} goal={g} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep}/>)}</div>}
  </Card>
- <div className="lg:col-span-2"><TaskList tasks={tasks} today={today} toggleTask={toggleTask} removeTask={removeTask}/></div>
- <div className="lg:col-span-2"><SessionHistory sessions={sessions} who="student"/></div>
- <CalendarSection goals={goals} today={today} sessions={sessions} tasks={tasks}/>
- <TaskForm onAdd={addTask} today={today}/></div>);
+ {/* 4. Log a new homework, task or habit */}
+ <TaskForm onAdd={addTask} today={today}/>
+ {/* 5. Past session logs */}
+ <div className="lg:col-span-2"><SessionHistory sessions={sessions} who="student"/></div></div>);
 }
 
 /* ---------- Weekly summary for parents: completion and streaks over a 7-day window ---------- */
