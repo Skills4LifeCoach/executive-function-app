@@ -426,17 +426,65 @@ function GoalForm({onAdd}){
   </form></Card>);
 }
 
+/* Edit a goal: title, due date, and action steps (rename, remove, add). Used by the student (own goals) and the coach (any goal). */
+function GoalEditor({goal,onSave,onCancel}){
+ const [title,setTitle]=useState(goal.g);
+ const [due,setDue]=useState(goal.due||'');
+ const [steps,setSteps]=useState(goal.steps.map(s=>({id:s.id,t:s.t})));
+ const [newStep,setNewStep]=useState('');
+ const [err,setErr]=useState('');
+ const inp="w-full border border-slate-300 rounded-xl px-3 py-2 focus:border-brand bg-white";
+ const setStepText=(i,t)=>{setSteps(xs=>xs.map((x,j)=>j===i?{...x,t}:x));setErr('')};
+ const removeAt=(i)=>{setSteps(xs=>xs.filter((_,j)=>j!==i));setErr('')};
+ const addNew=()=>{const t=newStep.trim();if(!t)return;setSteps(xs=>[...xs,{id:null,t}]);setNewStep('')};
+ const save=(e)=>{
+  e.preventDefault();
+  if(!title.trim()){setErr('The goal needs a title.');return}
+  const all=[...steps.map(x=>({...x,t:x.t.trim()})).filter(x=>x.t),...(newStep.trim()?[{id:null,t:newStep.trim()}]:[])];
+  if(all.length===0){setErr('Keep at least one action step.');return}
+  onSave({title:title.trim(),due,steps:all});
+ };
+ return(<form onSubmit={save} noValidate className="rounded-xl border-2 border-brand/40 bg-brand/5 p-4 space-y-3">
+  <p className="text-sm font-bold text-slate-800">Edit goal</p>
+  <div className="grid md:grid-cols-[1fr_180px] gap-3">
+   <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Goal Title</span>
+    <input value={title} onChange={e=>{setTitle(e.target.value);setErr('')}} className={inp}/></label>
+   <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Due Date</span>
+    <input type="date" value={due} onChange={e=>setDue(e.target.value)} className={inp}/></label>
+  </div>
+  <div>
+   <span className="block text-sm font-semibold text-slate-700 mb-1">Action Steps</span>
+   <ol className="space-y-1.5">{steps.map((st,i)=>(<li key={st.id||('n'+i)} className="flex items-center gap-2">
+    <span className="font-bold text-brand w-5 shrink-0">{i+1}.</span>
+    <input value={st.t} onChange={e=>setStepText(i,e.target.value)} aria-label={'Action step '+(i+1)} className={inp}/>
+    <button type="button" onClick={()=>removeAt(i)} aria-label={'Remove step '+(i+1)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"><X size={14}/></button></li>))}</ol>
+   <div className="flex gap-2 mt-2">
+    <input value={newStep} onChange={e=>setNewStep(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addNew()}}} aria-label="New action step" placeholder="Add another step" className={inp}/>
+    <button type="button" onClick={addNew} className="flex items-center gap-1 bg-white text-brand font-semibold rounded-xl px-4 py-2 border border-slate-200 hover:bg-brand/10 transition shrink-0"><Plus size={16}/>Add Step</button>
+   </div>
+  </div>
+  {err&&<p role="alert" className="text-sm text-red-700">{err}</p>}
+  <div className="flex gap-2">
+   <button type="submit" className="bg-brand text-white font-semibold rounded-xl px-4 py-2 hover:bg-royal transition">Save changes</button>
+   <button type="button" onClick={onCancel} className="bg-white text-slate-700 font-semibold rounded-xl px-4 py-2 border border-slate-200 hover:bg-slate-50 transition">Cancel</button>
+  </div>
+ </form>);
+}
+
 /* One core goal: automated progress bar, checkable action steps, and an add-step box. */
-function GoalCard({goal,toggleStep,addStep,removeStep}){
+function GoalCard({goal,toggleStep,addStep,removeStep,onEdit}){
  const [text,setText]=useState('');
+ const [editing,setEditing]=useState(false);
  const s=goalStats(goal);
  const submit=(e)=>{e.preventDefault();if(!text.trim())return;addStep(goal.id,text.trim());setText('')};
+ if(editing)return(<GoalEditor goal={goal} onSave={(v)=>{onEdit(goal.id,v);setEditing(false)}} onCancel={()=>setEditing(false)}/>);
  return(<div className={'rounded-xl border p-4 transition '+(s.achieved?'border-green-300 bg-green-50':'border-slate-200 bg-white')}>
   <div className="flex items-start justify-between gap-3 mb-2">
    <div className="min-w-0">
     {goal.assigned&&<span className="inline-block text-xs font-bold bg-brand/10 text-brand rounded-full px-2 py-0.5 mb-1">Assigned by your coach</span>}
     <p className="font-semibold text-slate-800">{goal.g}</p>
     {goal.due&&<p className="text-xs text-slate4 mt-0.5">Due {fmtShort(goal.due)}</p>}
+    {onEdit&&!goal.assigned&&<button type="button" onClick={()=>setEditing(true)} className="text-xs font-semibold text-brand hover:underline mt-1">Edit goal</button>}
    </div>
    {s.achieved
     ?<span className="pop inline-flex items-center gap-1.5 bg-green-500 text-white text-sm font-bold rounded-full px-3 py-1.5 shrink-0"><Trophy size={15}/>Goal Achieved! 🎉</span>
@@ -696,7 +744,7 @@ function SessionHistory({sessions,who}){
 }
 
 /* Student page order: 1. Task list  2. Calendar and schedule  3. Goals  4. Log homework/task/habit  5. Past session logs */
-function Student({goals,toggleStep,addStep,removeStep,addGoal,tasks,addTask,toggleTask,removeTask,today,sessions}){
+function Student({goals,toggleStep,addStep,removeStep,addGoal,editGoal,tasks,addTask,toggleTask,removeTask,today,sessions}){
  return(<div className="grid lg:grid-cols-2 gap-5">
  {/* 1. Task list */}
  <div className="lg:col-span-2"><TaskList tasks={tasks} today={today} toggleTask={toggleTask} removeTask={removeTask}/></div>
@@ -707,7 +755,7 @@ function Student({goals,toggleStep,addStep,removeStep,addGoal,tasks,addTask,togg
  <Card title="My Core Goals" icon={Target}>
   {goals.length===0
    ?<p className="text-sm text-slate4">No core goals yet. Create one on the left and break it into action steps.</p>
-   :<div className="space-y-4">{goals.map(g=><GoalCard key={g.id} goal={g} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep}/>)}</div>}
+   :<div className="space-y-4">{goals.map(g=><GoalCard key={g.id} goal={g} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep} onEdit={editGoal}/>)}</div>}
  </Card>
  {/* 4. Log a new homework, task or habit */}
  <TaskForm onAdd={addTask} today={today}/>
@@ -859,7 +907,8 @@ function Switch({on,toggle,label,hint}){
 }
 
 /* Coach panel: build a goal with a title, due date, and any number of action steps, then save it to the selected student. */
-function GoalAssigner({onAssign,goals,studentName}){
+function GoalAssigner({onAssign,onEdit,goals,studentName}){
+ const [editingId,setEditingId]=useState(null);
  const [title,setTitle]=useState('');
  const [due,setDue]=useState('');
  const [stepText,setStepText]=useState('');
@@ -906,8 +955,8 @@ function GoalAssigner({onAssign,goals,studentName}){
   <div className="mt-5 pt-4 border-t border-slate-100">
    <h4 className="text-sm font-bold text-slate-800 mb-2">Student’s Current Goals</h4>
    {goals.length===0?<p className="text-sm text-slate4">No goals yet.</p>
-   :<ul className="space-y-3">{goals.map(g=>{const s=goalStats(g);return(<li key={g.id}>
-    <div className="flex justify-between items-center gap-3 text-sm mb-1"><span className="font-medium text-slate-700">{g.g}{g.assigned&&<span className="ml-2 text-xs font-semibold text-brand">Coach-assigned</span>}</span><span className="font-bold text-brand shrink-0">{s.achieved?'Achieved 🎉':s.pct+'%'}</span></div>
+   :<ul className="space-y-3">{goals.map(g=>{const s=goalStats(g);if(editingId===g.id)return(<li key={g.id}><GoalEditor goal={g} onSave={(v)=>{onEdit(g.id,v);setEditingId(null)}} onCancel={()=>setEditingId(null)}/></li>);return(<li key={g.id}>
+    <div className="flex justify-between items-center gap-3 text-sm mb-1"><span className="font-medium text-slate-700">{g.g}{g.assigned&&<span className="ml-2 text-xs font-semibold text-brand">Coach-assigned</span>}</span><span className="shrink-0 flex items-center gap-3"><span className="font-bold text-brand">{s.achieved?'Achieved 🎉':s.pct+'%'}</span><button type="button" onClick={()=>setEditingId(g.id)} className="text-xs font-semibold text-brand hover:underline">Edit</button></span></div>
     <div className="h-2 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={s.pct} aria-label={'Progress for '+g.g}><div className={'h-full rounded-full transition-all '+(s.achieved?'bg-green-500':'bg-brand')} style={{width:s.pct+'%'}}/></div>
     <p className="text-xs text-slate4 mt-1">{s.done} of {s.total} action steps done{g.due?' · Due '+fmtShort(g.due):''}</p>
     {g.steps.length>0&&<ul className="mt-2 space-y-1">{g.steps.map((st,i)=>(<li key={st.id} className={'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm '+(st.done?'bg-green-50':'bg-slate-50')}>
@@ -956,7 +1005,7 @@ function CoachTaskList({tasks,today,studentName,removeTask,readOnly=false}){
 }
 
 /* Coach page order: 1. Student task list  2. Assign goal  3. Add homework/task/habit  4. Session notes, who can see, past logs  5. Invites */
-function Coach({report,setReport,saveSession,sessions,goals,assignGoal,studentName,studentId,tasks,today,addTask,removeTask}){
+function Coach({report,setReport,saveSession,sessions,goals,assignGoal,editGoal,studentName,studentId,tasks,today,addTask,removeTask}){
  const [msg,setMsg]=useState('');
  const [err,setErr]=useState('');
  const [saving,setSaving]=useState(false);
@@ -978,7 +1027,7 @@ function Coach({report,setReport,saveSession,sessions,goals,assignGoal,studentNa
  <CoachTaskList tasks={tasks} today={today} studentName={studentName} removeTask={removeTask}/>
 
  {/* 2. Assign new student goal */}
- <GoalAssigner onAssign={assignGoal} goals={goals} studentName={studentName}/>
+ <GoalAssigner onAssign={assignGoal} onEdit={editGoal} goals={goals} studentName={studentName}/>
 
  {/* 3. Add homework, task or habit */}
  <TaskForm onAdd={addTask} today={today} heading={'Add Homework, Task or Habit'+(studentName?' for '+studentName:'')} forName={studentName}/>
@@ -1150,6 +1199,23 @@ function App(){
   }
   if(r.error)failed(r.error);
  };
+ /* Edit a goal's title, due date and steps. Existing steps keep their done status; removed steps are deleted; new steps are added. */
+ const editGoal=async(gid,{title,due,steps})=>{
+  const goal=goals.find(g=>g.id===gid);if(!goal)return;
+  const old=new Map(goal.steps.map(x=>[x.id,x]));
+  const next=steps.map((x,i)=>{const o=x.id&&old.get(x.id);return {id:o?o.id:newId(),t:x.t,done:o?o.done:false,pos:i,isNew:!o,changed:!!o&&(o.t!==x.t||o.pos!==i)}});
+  const keep=new Set(next.map(x=>x.id));
+  const removed=goal.steps.filter(x=>!keep.has(x.id)).map(x=>x.id);
+  setGoals(gs=>gs.map(g=>g.id!==gid?g:{...g,g:title,due,steps:next.map(x=>({id:x.id,t:x.t,done:x.done,pos:x.pos}))}));
+  const results=[];
+  results.push(await sb.from('goals').update({title,due_date:due||null}).eq('id',gid));
+  if(removed.length)results.push(await sb.from('goal_steps').delete().in('id',removed));
+  const fresh=next.filter(x=>x.isNew);
+  if(fresh.length)results.push(await sb.from('goal_steps').insert(fresh.map(x=>({id:x.id,goal_id:gid,student_id:activeId,title:x.t,done:false,position:x.pos}))));
+  for(const x of next.filter(x=>x.changed))results.push(await sb.from('goal_steps').update({title:x.t,position:x.pos}).eq('id',x.id));
+  const bad=results.find(r=>r.error);
+  if(bad)failed(bad.error);
+ };
  const addGoal=(x)=>saveGoal(x,true);
  const assignGoal=(x)=>saveGoal(x,false);
 
@@ -1230,9 +1296,9 @@ function App(){
      :loading
       ?<p className="text-center text-slate4 mt-10" aria-live="polite">Loading…</p>
       :<>
-       {role==='student'&&<Student goals={goals} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep} addGoal={addGoal} tasks={tasks} addTask={addTask} toggleTask={toggleTask} removeTask={removeTask} today={today} sessions={sessions.filter(x=>x.toStudent)}/>}
+       {role==='student'&&<Student goals={goals} toggleStep={toggleStep} addStep={addStep} removeStep={removeStep} addGoal={addGoal} editGoal={editGoal} tasks={tasks} addTask={addTask} toggleTask={toggleTask} removeTask={removeTask} today={today} sessions={sessions.filter(x=>x.toStudent)}/>}
        {role==='parent'&&<Parent onRedeem={finishSetup}  sessions={sessions.filter(x=>x.toParent)} wins={wins} goals={goals} tasks={tasks} today={today} childName={activeStudent?activeStudent.full_name:''}/>}
-       {role==='coach'&&<Coach studentId={activeId}  report={report} setReport={setReport} saveSession={saveSession} sessions={sessions} goals={goals} assignGoal={assignGoal} studentName={activeStudent?activeStudent.full_name:''} tasks={tasks} today={today} addTask={addTask} removeTask={removeTask}/>}
+       {role==='coach'&&<Coach studentId={activeId}  report={report} setReport={setReport} saveSession={saveSession} sessions={sessions} goals={goals} assignGoal={assignGoal} editGoal={editGoal} studentName={activeStudent?activeStudent.full_name:''} tasks={tasks} today={today} addTask={addTask} removeTask={removeTask}/>}
       </>}
    </>}
   </main>
