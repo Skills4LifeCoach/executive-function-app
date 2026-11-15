@@ -509,7 +509,7 @@ function GoalCard({goal,toggleStep,addStep,removeStep,renameStep,onEdit}){
     {st.done?<CheckCircle2 className="text-green-500 shrink-0" size={20}/>:<Circle className="text-slate-400 shrink-0" size={20}/>}
     <span className={st.done?'line-through text-slate-400':'text-slate-800'}><span className="font-semibold text-slate4 mr-1">{i+1}.</span>{st.t}</span></button>
    <button type="button" onClick={()=>{setDraft(st.t);setEditStep(st.id)}} aria-label={'Edit step: '+st.t} className="text-xs font-semibold text-brand hover:bg-brand/10 rounded-lg px-2 py-1.5 shrink-0">Edit</button>
-   <button type="button" onClick={()=>{if(window.confirm('Remove this step?\n\n'+st.t))removeStep(goal.id,st.id)}} aria-label={'Remove step: '+st.t} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"><X size={14}/></button>
+   <button type="button" onClick={()=>{if(window.confirm('Delete this step?\n\n'+st.t))removeStep(goal.id,st.id)}} aria-label={'Delete step: '+st.t} className="text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg px-2 py-1.5 shrink-0">Delete</button>
   </li>))}</ul>}
   <form onSubmit={submit} className="flex gap-2 mt-3">
    <input value={text} onChange={e=>setText(e.target.value)} aria-label={'Add an action step to '+goal.g} placeholder="Add an action step" className="flex-1 min-w-0 border border-slate-300 rounded-xl px-3 py-1.5 text-sm focus:border-brand bg-white"/>
@@ -985,7 +985,7 @@ function GoalAssigner({onAssign,onEdit,onRenameStep,onRemoveStep,goals,studentNa
      <span className={'flex-1 min-w-0 '+(st.done?'line-through text-slate-400':'text-slate-800')}><span className="font-semibold text-slate4 mr-1">{i+1}.</span>{st.t}</span>
      <span className="sr-only">{st.done?'(done)':'(not done)'}</span>
      <button type="button" onClick={()=>{setDraft(st.t);setEditStep(st.id)}} aria-label={'Edit step: '+st.t} className="text-xs font-semibold text-brand hover:bg-brand/10 rounded-lg px-2 py-1 shrink-0">Edit</button>
-     <button type="button" onClick={()=>{if(window.confirm('Remove this step?\n\n'+st.t))onRemoveStep(g.id,st.id)}} aria-label={'Remove step: '+st.t} className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"><X size={14}/></button>
+     <button type="button" onClick={()=>{if(window.confirm('Delete this step?\n\n'+st.t))onRemoveStep(g.id,st.id)}} aria-label={'Delete step: '+st.t} className="text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg px-2 py-1 shrink-0">Delete</button>
     </li>))}</ul>}</li>);})}</ul>}
   </div>
  </Card>);
@@ -1215,6 +1215,8 @@ function App(){
   if(activeId)loadData(activeId);
  };
  const check=({error})=>{if(error)failed(error)};
+ /* A change blocked by the database's privacy rules can come back with no error but zero rows changed. Treat that as a failure too. */
+ const checkRows=(want)=>({data,error})=>{if(error)return failed(error);if(!data||data.length<want)failed(new Error('Change blocked: no rows were changed'))};
 
  /* Goal action steps: progress is derived from these, so there is no manual progress value. */
  const toggleStep=(gid,sid)=>{
@@ -1233,11 +1235,11 @@ function App(){
  };
  const renameStep=(gid,sid,t)=>{
   setGoals(gs=>gs.map(g=>g.id!==gid?g:{...g,steps:g.steps.map(s=>s.id===sid?{...s,t}:s)}));
-  sb.from('goal_steps').update({title:t}).eq('id',sid).then(check);
+  sb.from('goal_steps').update({title:t}).eq('id',sid).select('id').then(checkRows(1));
  };
  const removeStep=(gid,sid)=>{
   setGoals(gs=>gs.map(g=>g.id!==gid?g:{...g,steps:g.steps.filter(s=>s.id!==sid)}));
-  sb.from('goal_steps').delete().eq('id',sid).then(check);
+  sb.from('goal_steps').delete().eq('id',sid).select('id').then(checkRows(1));
  };
  /* A student's own goal (is_personal) or a coach-assigned goal. Both live in the same table the student, parent, and calendar read. */
  const saveGoal=async({title,due,steps},personal)=>{
@@ -1259,13 +1261,13 @@ function App(){
   const removed=goal.steps.filter(x=>!keep.has(x.id)).map(x=>x.id);
   setGoals(gs=>gs.map(g=>g.id!==gid?g:{...g,g:title,due,steps:next.map(x=>({id:x.id,t:x.t,done:x.done,pos:x.pos}))}));
   const results=[];
-  results.push(await sb.from('goals').update({title,due_date:due||null}).eq('id',gid));
-  if(removed.length)results.push(await sb.from('goal_steps').delete().in('id',removed));
+  {const r=await sb.from('goals').update({title,due_date:due||null}).eq('id',gid).select('id');r.want=1;results.push(r)}
+  if(removed.length){const r=await sb.from('goal_steps').delete().in('id',removed).select('id');r.want=removed.length;results.push(r)}
   const fresh=next.filter(x=>x.isNew);
   if(fresh.length)results.push(await sb.from('goal_steps').insert(fresh.map(x=>({id:x.id,goal_id:gid,student_id:activeId,title:x.t,done:false,position:x.pos}))));
-  for(const x of next.filter(x=>x.changed))results.push(await sb.from('goal_steps').update({title:x.t,position:x.pos}).eq('id',x.id));
-  const bad=results.find(r=>r.error);
-  if(bad)failed(bad.error);
+  for(const x of next.filter(x=>x.changed)){const r=await sb.from('goal_steps').update({title:x.t,position:x.pos}).eq('id',x.id).select('id');r.want=1;results.push(r)}
+  const bad=results.find(r=>r.error||(r.want&&(!r.data||r.data.length<r.want)));
+  if(bad)failed(bad.error||new Error('Change blocked: no rows were changed'));
  };
  const addGoal=(x)=>saveGoal(x,true);
  const assignGoal=(x)=>saveGoal(x,false);
