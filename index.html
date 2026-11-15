@@ -1090,6 +1090,7 @@ function App(){
  const [goals,setGoals]=useState([]);
  const [tasks,setTasks]=useState([]);
  const [today,setToday]=useState(todayISO());
+ const [live,setLive]=useState('off');
  useEffect(()=>{const id=setInterval(()=>setToday(todayISO()),60000);return()=>clearInterval(id)},[]);
 
  /* Keep people signed in after a page refresh, and react to sign-out. */
@@ -1175,12 +1176,12 @@ function App(){
     ch=ch.on('postgres_changes',{event:'*',schema:'public',table:t,filter:'student_id=eq.'+activeId},refresh)
          .on('postgres_changes',{event:'DELETE',schema:'public',table:t},refresh);
    });
-   ch.subscribe();
+   ch.subscribe((status)=>{if(alive)setLive(status==='SUBSCRIBED'?'live':(status==='CLOSED'?'off':'retry'));console.log('Live updates:',status)});
   }catch(ex){console.error(ex)}
   const onVis=()=>{if(document.visibilityState==='visible')refresh()};
   document.addEventListener('visibilitychange',onVis);
-  const poll=setInterval(()=>{if(document.visibilityState==='visible')refresh()},20000);
-  return()=>{alive=false;clearTimeout(timer);clearInterval(poll);document.removeEventListener('visibilitychange',onVis);if(ch)sb.removeChannel(ch)};
+  const poll=setInterval(()=>{refresh()},15000);
+  return()=>{alive=false;setLive('off');clearTimeout(timer);clearInterval(poll);document.removeEventListener('visibilitychange',onVis);if(ch)sb.removeChannel(ch)};
  },[user,activeId]);
 
  /* If a save fails, tell the person and reload from the database so the screen matches what was really saved. */
@@ -1324,7 +1325,7 @@ function App(){
       </>}
    </>}
   </main>
-  <footer className="text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life</footer>
+  <footer className="text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life{user&&<span className="block mt-1" aria-live="polite">{live==='live'?'● Live updates on':live==='retry'?'○ Live updates reconnecting (page still refreshes every 15 seconds)':'○ Live updates starting…'}</span>}</footer>
  </div>);
 }
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
