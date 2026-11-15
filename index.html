@@ -1143,14 +1143,14 @@ function App(){
  useEffect(()=>{setActiveId(user&&user.students[0]?user.students[0].id:null)},[user]);
 
  /* Load the selected student's goals, tasks, and session logs. The database's privacy rules decide what comes back. */
- const loadData=async(sid,stillCurrent=()=>true)=>{
+ const loadData=async(sid,stillCurrent=()=>true,quiet=false)=>{
   const [g,t,s]=await Promise.all([
    sb.from('goals').select('*, goal_steps(*)').eq('student_id',sid).order('created_at'),
    sb.from('tasks').select('*').eq('student_id',sid).order('created_at'),
    role==='student'?sb.rpc('student_session_logs',{sid}):sb.from('session_logs').select('*').eq('student_id',sid).order('session_date',{ascending:false}).order('created_at',{ascending:false})
   ]);
   if(!stillCurrent())return;
-  if(g.error||t.error||s.error){console.error(g.error||t.error||s.error);setDbError('We could not load the latest information. Please refresh the page or try again in a moment.');return}
+  if(g.error||t.error||s.error){console.error(g.error||t.error||s.error);if(!quiet)setDbError('We could not load the latest information. Please refresh the page or try again in a moment.');return}
   setGoals(g.data.map(mapGoal));setTasks(t.data.map(mapTask));setSessions(s.data.map(mapLog));
  };
  useEffect(()=>{
@@ -1159,6 +1159,28 @@ function App(){
   setLoading(true);
   loadData(activeId,()=>alive).finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
+ },[user,activeId]);
+
+ /* Live updates: when the coach, student or parent changes something, everyone who has this student's page open sees it
+    within a moment. Supabase Realtime pushes the change; a tab-focus refresh and a 20-second check are the safety net
+    (the student's session logs come through a private function, so they rely on that check). */
+ useEffect(()=>{
+  if(!user||!activeId)return;
+  let alive=true,timer=null;
+  const refresh=()=>{clearTimeout(timer);timer=setTimeout(()=>{if(alive)loadData(activeId,()=>alive,true)},400)};
+  let ch=null;
+  try{
+   ch=sb.channel('student-'+activeId);
+   ['goals','goal_steps','tasks','session_logs'].forEach(t=>{
+    ch=ch.on('postgres_changes',{event:'*',schema:'public',table:t,filter:'student_id=eq.'+activeId},refresh)
+         .on('postgres_changes',{event:'DELETE',schema:'public',table:t},refresh);
+   });
+   ch.subscribe();
+  }catch(ex){console.error(ex)}
+  const onVis=()=>{if(document.visibilityState==='visible')refresh()};
+  document.addEventListener('visibilitychange',onVis);
+  const poll=setInterval(()=>{if(document.visibilityState==='visible')refresh()},20000);
+  return()=>{alive=false;clearTimeout(timer);clearInterval(poll);document.removeEventListener('visibilitychange',onVis);if(ch)sb.removeChannel(ch)};
  },[user,activeId]);
 
  /* If a save fails, tell the person and reload from the database so the screen matches what was really saved. */
