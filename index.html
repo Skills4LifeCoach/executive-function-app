@@ -503,6 +503,7 @@ function GoalCard({goal,toggleStep,addStep,removeStep,renameStep,onEdit}){
     <input autoFocus value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();saveStep(st.id)}if(e.key==='Escape')setEditStep(null)}} aria-label={'Edit action step '+(i+1)} className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:border-brand bg-white"/>
     <button type="button" onClick={()=>saveStep(st.id)} className="bg-brand text-white text-sm font-semibold rounded-lg px-3 py-1.5 hover:bg-royal transition shrink-0">Save</button>
     <button type="button" onClick={()=>setEditStep(null)} className="text-sm font-semibold text-slate-600 rounded-lg px-2 py-1.5 hover:bg-slate-100 shrink-0">Cancel</button>
+    <button type="button" onClick={()=>{if(window.confirm('Delete this step?\n\n'+st.t)){removeStep(goal.id,st.id);setEditStep(null)}}} className="text-sm font-semibold text-red-600 rounded-lg px-2 py-1.5 hover:bg-red-50 shrink-0">Delete</button>
    </li>
    :<li key={st.id} className="flex items-center gap-1">
    <button type="button" role="checkbox" aria-checked={st.done} onClick={()=>toggleStep(goal.id,st.id)} className={'flex-1 min-w-0 flex items-center gap-2.5 p-2 rounded-lg text-left text-sm transition '+(st.done?'bg-green-50':'hover:bg-slate-50')}>
@@ -979,6 +980,7 @@ function GoalAssigner({onAssign,onEdit,onRenameStep,onRemoveStep,goals,studentNa
       <input autoFocus value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();saveStep(g.id,st.id)}if(e.key==='Escape')setEditStep(null)}} aria-label={'Edit action step '+(i+1)} className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:border-brand bg-white"/>
       <button type="button" onClick={()=>saveStep(g.id,st.id)} className="bg-brand text-white text-sm font-semibold rounded-lg px-3 py-1.5 hover:bg-royal transition shrink-0">Save</button>
       <button type="button" onClick={()=>setEditStep(null)} className="text-sm font-semibold text-slate-600 rounded-lg px-2 py-1.5 hover:bg-slate-100 shrink-0">Cancel</button>
+      <button type="button" onClick={()=>{if(window.confirm('Delete this step?\n\n'+st.t)){onRemoveStep(g.id,st.id);setEditStep(null)}}} className="text-sm font-semibold text-red-600 rounded-lg px-2 py-1.5 hover:bg-red-50 shrink-0">Delete</button>
      </li>
      :<li key={st.id} className={'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm '+(st.done?'bg-green-50':'bg-slate-50')}>
      <span aria-hidden="true" className={'font-bold w-4 text-center shrink-0 '+(st.done?'text-green-600':'text-slate-400')}>{st.done?'✓':'○'}</span>
@@ -1355,7 +1357,7 @@ function App(){
       </>}
    </>}
   </main>
-  <footer className="text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life{user&&<span className="block mt-1" aria-live="polite">{live==='live'?'● Live updates on':live==='retry'?'○ Live updates reconnecting (page still refreshes every 15 seconds)':'○ Live updates starting…'}</span>}</footer>
+  <footer className="text-center text-xs text-slate4 pb-8">Skills 4Life Coaching · Executive function skills for life · v2026-11-15-delete{user&&<span className="block mt-1" aria-live="polite">{live==='live'?'● Live updates on':live==='retry'?'○ Live updates reconnecting (page still refreshes every 15 seconds)':'○ Live updates starting…'}</span>}</footer>
  </div>);
 }
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
