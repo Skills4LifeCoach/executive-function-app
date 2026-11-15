@@ -666,59 +666,6 @@ function AddChildCard({onRedeem}){
  </Card>);
 }
 
-/* Older invite card for an existing student (no longer shown on the coach page). */
-function InviteManager({studentId,studentName}){
- const [role,setRole]=useState('parent');
- const [rows,setRows]=useState([]);
- const [msg,setMsg]=useState('');
- const [err,setErr]=useState('');
- const [busy,setBusy]=useState(false);
- const load=async()=>{
-  const {data,error}=await sb.from('invites').select('*').eq('student_id',studentId).order('created_at',{ascending:false});
-  if(error){console.error(error);setErr('Could not load invites.');return}
-  setRows(data||[]);
- };
- useEffect(()=>{setMsg('');setErr('');if(studentId)load()},[studentId]);
- const link=window.location.origin+window.location.pathname;
- const copy=async(r)=>{
-  const text=`Hi! Create your Skills 4Life Coaching account at ${link} (tap "Have an invite code?"). Your invite code is ${r.code}. It expires ${fmtShort(r.expires_at.slice(0,10))}.`;
-  try{await navigator.clipboard.writeText(text);setMsg('Invite message copied. Paste it into an email or text.');setErr('')}
-  catch(ex){setErr('Could not copy automatically. Select the code and copy it by hand.')}
- };
- const create=async()=>{
-  setBusy(true);setMsg('');setErr('');
-  const {data,error}=await sb.from('invites').insert({code:makeCode(),student_id:studentId,role}).select().single();
-  setBusy(false);
-  if(error){console.error(error);setErr('The invite could not be created. Please try again.');return}
-  await load();copy(data);
- };
- const revoke=async(r)=>{
-  const {error}=await sb.from('invites').delete().eq('id',r.id);
-  if(error){console.error(error);setErr('Could not remove that invite.');return}
-  load();
- };
- const status=(r)=>r.used_at?'Used':(new Date(r.expires_at)<new Date()?'Expired':'Active');
- return(<Card title={'Invite a Family Member'+(studentName?' for '+studentName:'')} icon={Send}>
-  <div className="flex flex-wrap items-end gap-3">
-   <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Who is this invite for?</span>
-    <select value={role} onChange={e=>setRole(e.target.value)} className="border border-slate-300 rounded-xl px-3 py-2 bg-white focus:border-brand">
-     <option value="parent">A parent of {studentName||'this student'}</option><option value="student">{studentName||'The student'} (student login)</option></select></label>
-   <button type="button" onClick={create} disabled={busy||!studentId} className="flex items-center gap-1.5 bg-brand text-white font-semibold rounded-xl px-4 py-2 hover:bg-royal transition disabled:opacity-60"><Plus size={16}/>{busy?'Creating…':'Create invite'}</button>
-  </div>
-  <div aria-live="polite" className="mt-3 text-sm">{err?<p role="alert" className="text-red-700">{err}</p>:<p className="text-green-700 font-medium">{msg}</p>}</div>
-  <p className="text-xs text-slate4 mt-1">Each code works once and expires in 14 days. Under-13 students should have a parent or coach create their account.</p>
-  {rows.length>0&&<ul className="mt-4 space-y-1.5">{rows.map(r=>{const st=status(r);return(
-   <li key={r.id} className="flex flex-wrap items-center gap-3 p-2.5 rounded-xl border border-slate-200 bg-white">
-    <span className="font-mono font-bold text-slate-800 tracking-wider">{r.code}</span>
-    <span className="text-xs font-semibold text-brand">{r.role==='parent'?'Parent':'Student'}</span>
-    <span className={'text-xs font-bold '+(st==='Active'?'text-green-700':'text-slate4')}>{st}</span>
-    <span className="flex-1"/>
-    {st==='Active'&&<><button type="button" onClick={()=>copy(r)} className="text-sm font-semibold text-brand hover:underline">Copy message</button>
-     <button type="button" onClick={()=>revoke(r)} aria-label={'Remove invite '+r.code} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50"><X size={14}/></button></>}
-   </li>);})}</ul>}
- </Card>);
-}
-
 /* Past session logs, newest first. Tap one to expand. who = 'coach' | 'parent' | 'student' */
 function SessionHistory({sessions,who}){
  const [open,setOpen]=useState(null);
@@ -1003,6 +950,7 @@ function CoachTaskList({tasks,today,studentName,removeTask,readOnly=false}){
  </Card>);
 }
 
+/* Coach page order: 1. Student task list  2. Assign goal  3. Add homework/task/habit  4. Session notes, who can see, past logs  5. Invites */
 function Coach({report,setReport,saveSession,sessions,goals,assignGoal,studentName,studentId,tasks,today,addTask,removeTask}){
  const [msg,setMsg]=useState('');
  const [err,setErr]=useState('');
@@ -1020,29 +968,41 @@ function Coach({report,setReport,saveSession,sessions,goals,assignGoal,studentNa
   if(res.ok){setMsg('Session log saved. Visible to: '+(who||'coach only')+'.'+(res.email?' '+res.email:''));setErr('')}
   else{setErr('The session log could not be saved. Please try again.');setMsg('')}
  };
- const badge=(x)=>[x.toParent&&'Parent',x.toStudent&&'Student',x.emailed&&'Emailed'].filter(Boolean);
- return(<div className="grid lg:grid-cols-3 gap-5">
- <div className="lg:col-span-2"><Card title="Session Notes" icon={ClipboardList}><div className="space-y-4">
-  <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Session date</span><input type="date" value={report.date} onChange={e=>set('date',e.target.value)} className="border border-slate-300 rounded-xl px-3 py-2"/></label>
-  {field('Wins this session','wins','What went well? One win per line.')}
-  {field('Focus for next time','focus','What will we work on next?')}
-  {field('Note for parents (optional)','note','Anything parents can support at home?',3)}
-  <div className="flex flex-wrap gap-3 items-center"><button onClick={save} disabled={saving} className="flex items-center gap-2 bg-brand text-white font-semibold rounded-xl px-4 py-2 disabled:opacity-60"><Send size={16}/>{saving?'Saving…':'Save session log'}</button>
-   <span aria-live="polite" className="text-sm">{err?<span role="alert" className="text-red-700">{err}</span>:<span className="text-green-700 font-medium">{msg}</span>}</span></div>
- </div></Card></div>
- <div className="space-y-5">
- <Card title="Who Can See This Log" icon={Eye}>
-  <div className="space-y-4">
-   <Switch on={report.toParent} toggle={()=>set('toParent',!report.toParent)} label={report.toParent?'Shown to parent':'Hidden from parent'} hint="Latest update, session log, wins tracker, printable report"/>
-   <Switch on={report.toStudent} toggle={()=>set('toStudent',!report.toStudent)} label={report.toStudent?'Shown to student':'Hidden from student'} hint="Student sees wins and focus in Past Session Logs (never your parent note)"/>
-   <Switch on={report.emailParent&&report.toParent} toggle={()=>set('emailParent',!report.emailParent)} label={report.emailParent&&report.toParent?'Email parent(s) on save':'No email on save'} hint={report.toParent?'Sends the wins, focus and your note to each linked parent':'Turn on "Shown to parent" to send an email'}/>
+ return(<div className="space-y-5">
+ {/* 1. Student task list */}
+ <CoachTaskList tasks={tasks} today={today} studentName={studentName} removeTask={removeTask}/>
+
+ {/* 2. Assign new student goal */}
+ <GoalAssigner onAssign={assignGoal} goals={goals} studentName={studentName}/>
+
+ {/* 3. Add homework, task or habit */}
+ <TaskForm onAdd={addTask} today={today} heading={'Add Homework, Task or Habit'+(studentName?' for '+studentName:'')} forName={studentName}/>
+
+ {/* 4. Session notes, who can see, past session logs */}
+ <div className="grid lg:grid-cols-3 gap-5">
+  <div className="lg:col-span-2"><Card title="Session Notes" icon={ClipboardList}><div className="space-y-4">
+   <label className="block"><span className="block text-sm font-semibold text-slate-700 mb-1">Session date</span><input type="date" value={report.date} onChange={e=>set('date',e.target.value)} className="border border-slate-300 rounded-xl px-3 py-2"/></label>
+   {field('Wins this session','wins','What went well? One win per line.')}
+   {field('Focus for next time','focus','What will we work on next?')}
+   {field('Note for parents (optional)','note','Anything parents can support at home?',3)}
+   <div className="flex flex-wrap gap-3 items-center"><button onClick={save} disabled={saving} className="flex items-center gap-2 bg-brand text-white font-semibold rounded-xl px-4 py-2 disabled:opacity-60"><Send size={16}/>{saving?'Saving…':'Save session log'}</button>
+    <span aria-live="polite" className="text-sm">{err?<span role="alert" className="text-red-700">{err}</span>:<span className="text-green-700 font-medium">{msg}</span>}</span></div>
+  </div></Card></div>
+  <div className="space-y-5">
+   <Card title="Who Can See This Log" icon={Eye}>
+    <div className="space-y-4">
+     <Switch on={report.toParent} toggle={()=>set('toParent',!report.toParent)} label={report.toParent?'Shown to parent':'Hidden from parent'} hint="Latest update, session log, wins tracker, printable report"/>
+     <Switch on={report.toStudent} toggle={()=>set('toStudent',!report.toStudent)} label={report.toStudent?'Shown to student':'Hidden from student'} hint="Student sees wins and focus in Past Session Logs (never your parent note)"/>
+     <Switch on={report.emailParent&&report.toParent} toggle={()=>set('emailParent',!report.emailParent)} label={report.emailParent&&report.toParent?'Email parent(s) on save':'No email on save'} hint={report.toParent?'Sends the wins, focus and your note to each linked parent':'Turn on "Shown to parent" to send an email'}/>
+    </div>
+   </Card>
+   <SessionHistory sessions={sessions} who="coach"/>
   </div>
- </Card>
- <SessionHistory sessions={sessions} who="coach"/></div>
- <div className="lg:col-span-3 grid lg:grid-cols-2 gap-5"><NewStudentInvite/><ParentInvite studentId={studentId} studentName={studentName}/></div>
- <div className="lg:col-span-3"><GoalAssigner onAssign={assignGoal} goals={goals} studentName={studentName}/></div>
- <div className="lg:col-span-3"><CoachTaskList tasks={tasks} today={today} studentName={studentName} removeTask={removeTask}/></div>
- <div className="lg:col-span-3 grid lg:grid-cols-2 gap-5"><TaskForm onAdd={addTask} today={today} heading={'Add Homework, Task or Habit'+(studentName?' for '+studentName:'')} forName={studentName}/></div></div>);
+ </div>
+
+ {/* 5. Invite new student and parent */}
+ <div className="grid lg:grid-cols-2 gap-5"><NewStudentInvite/><ParentInvite studentId={studentId} studentName={studentName}/></div>
+</div>);
 }
 
 /* Coaches (and parents with more than one child) choose which student they are looking at. The database only ever returns students they are allowed to see. */
